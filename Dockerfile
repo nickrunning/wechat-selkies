@@ -96,3 +96,6 @@ RUN cp /usr/share/icons/hicolor/128x128/apps/wechat.png /usr/share/selkies/www/i
 
 # add local files
 COPY /root /
+
+# ensure custom cont-init scripts are executable
+RUN chmod +x /etc/cont-init.d/90-selkies-paste-config

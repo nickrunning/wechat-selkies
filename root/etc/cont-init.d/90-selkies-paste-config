@@ -1,0 +1,35 @@
+﻿#!/usr/bin/with-contenv bash
+set -e
+
+CONFIG_PATH="/usr/share/selkies/selkies-dashboard/src/selkies-paste-config.js"
+
+ENABLED_RAW="${SELKIES_PASTE_IMAGE:-false}"
+MAX_BYTES_RAW="${SELKIES_PASTE_IMAGE_MAX_SIZE:-20971520}"
+AUTO_PASTE_RAW="${SELKIES_PASTE_IMAGE_AUTO_PASTE:-true}"
+
+enabled_js="false"
+case "${ENABLED_RAW,,}" in
+  true|1|yes|on) enabled_js="true" ;;
+  *) enabled_js="false" ;;
+esac
+
+max_bytes="${MAX_BYTES_RAW}"
+if ! [[ "$max_bytes" =~ ^[0-9]+$ ]]; then
+  max_bytes="20971520"
+fi
+
+auto_js="true"
+case "${AUTO_PASTE_RAW,,}" in
+  false|0|no|off) auto_js="false" ;;
+  *) auto_js="true" ;;
+esac
+
+cat > "$CONFIG_PATH" <<EOF
+window.__SELKIES_PASTE_IMAGE__ = {
+  enabled: ${enabled_js},
+  maxBytes: ${max_bytes},
+  autoPaste: ${auto_js}
+};
+EOF
+
+chmod 644 "$CONFIG_PATH"

@@ -1,4 +1,4 @@
-# WeChat Selkies
+﻿# WeChat Selkies
 
 [![GitHub Stars](https://img.shields.io/github/stars/nickrunning/wechat-selkies?style=flat-square&logo=github&color=yellow)](https://github.com/nickrunning/wechat-selkies/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/nickrunning/wechat-selkies?style=flat-square&logo=github&color=blue)](https://github.com/nickrunning/wechat-selkies/network/members)
@@ -145,6 +145,28 @@ Configure the following environment variables in `docker-compose.yml`:
 | `PASSWORD` | - | Web UI access password (recommended) |
 | `AUTO_START_WECHAT` | `true` | Whether to automatically start the WeChat client |
 | `AUTO_START_QQ` | `false` | Whether to automatically start the QQ client |
+| `SELKIES_ENABLE_BINARY_CLIPBOARD` | `false` | Enable binary clipboard (images, etc.) |
+| `SELKIES_PASTE_IMAGE` | `false` | Enable Ctrl+V image paste in browser |
+| `SELKIES_PASTE_IMAGE_MAX_SIZE` | `20971520` | Max image size in bytes (default 20MB) |
+| `SELKIES_PASTE_IMAGE_AUTO_PASTE` | `true` | Auto-trigger remote Ctrl+V after clipboard write |
+
+#### Image Paste (Ctrl+V)
+
+To enable image paste, turn on binary clipboard and the feature flag:
+
+- `SELKIES_ENABLE_BINARY_CLIPBOARD=true`
+- `SELKIES_PASTE_IMAGE=true`
+
+Optional settings:
+
+- `SELKIES_PASTE_IMAGE_MAX_SIZE`: Max image size (default 20MB)
+- `SELKIES_PASTE_IMAGE_AUTO_PASTE=false`: Disable auto Ctrl+V after clipboard write
+
+Notes:
+
+- Clipboard is only read on user paste (Ctrl+V or paste event)
+- HTTPS or localhost is required for the Clipboard API
+- At least `image/png` is supported; other formats depend on client/WeChat
 
 #### Port Configuration
 
@@ -263,3 +285,7 @@ This project is licensed under **MIT License**. See the [LICENSE](LICENSE) file 
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=nickrunning/wechat-selkies&type=Date)](https://www.star-history.com/#nickrunning/wechat-selkies&Date)
+
+
+
+

@@ -1,4 +1,4 @@
-# WeChat Selkies
+﻿# WeChat Selkies
 
 [![GitHub Stars](https://img.shields.io/github/stars/nickrunning/wechat-selkies?style=flat-square&logo=github&color=yellow)](https://github.com/nickrunning/wechat-selkies/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/nickrunning/wechat-selkies?style=flat-square&logo=github&color=blue)](https://github.com/nickrunning/wechat-selkies/network/members)
@@ -148,6 +148,28 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
 | `PASSWORD` | - | Web UI 访问密码（推荐设置） |
 | `AUTO_START_WECHAT` | `true` | 是否自动启动微信客户端 |
 | `AUTO_START_QQ` | `false` | 是否自动启动 QQ 客户端 |
+| `SELKIES_ENABLE_BINARY_CLIPBOARD` | `false` | 启用二进制剪贴板（图片等） |
+| `SELKIES_PASTE_IMAGE` | `false` | 启用浏览器内 Ctrl+V 图片粘贴 |
+| `SELKIES_PASTE_IMAGE_MAX_SIZE` | `20971520` | 图片粘贴最大字节数（默认 20MB） |
+| `SELKIES_PASTE_IMAGE_AUTO_PASTE` | `true` | 写入远端剪贴板后自动发送 Ctrl+V |
+
+#### 图片粘贴（Ctrl+V）
+
+启用该功能需同时开启 Selkies 二进制剪贴板与本功能开关：
+
+- `SELKIES_ENABLE_BINARY_CLIPBOARD=true`
+- `SELKIES_PASTE_IMAGE=true`
+
+可选配置：
+
+- `SELKIES_PASTE_IMAGE_MAX_SIZE`：最大图片大小（默认 20MB）
+- `SELKIES_PASTE_IMAGE_AUTO_PASTE=false`：关闭自动触发远端 Ctrl+V
+
+注意事项：
+
+- 仅在用户触发粘贴（Ctrl+V 或浏览器粘贴事件）时读取剪贴板
+- 需要 HTTPS 或 localhost 才能使用 Clipboard API
+- 目前至少支持 `image/png`，其它格式视客户端/微信支持情况而定
 
 #### 端口配置
 
@@ -265,3 +287,6 @@ docker-compose logs -f wechat-selkies
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=nickrunning/wechat-selkies&type=Date)](https://www.star-history.com/#nickrunning/wechat-selkies&Date)
+
+
+

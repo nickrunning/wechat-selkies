@@ -18,4 +18,8 @@ services:
       - PGID=100          # set group id according to your system
       # - CUSTOM_USER=<Your Name>   # recommended to set a custom user name
       # - PASSWORD=<Your Password>  # recommended to set a password for selkies web ui
+      # - SELKIES_ENABLE_BINARY_CLIPBOARD=true  # required for image paste
+      # - SELKIES_PASTE_IMAGE=true              # enable Ctrl+V image paste
+      # - SELKIES_PASTE_IMAGE_MAX_SIZE=20971520 # max image size in bytes
+      # - SELKIES_PASTE_IMAGE_AUTO_PASTE=false  # disable auto Ctrl+V after write
     shm_size: "1gb"       # recommended, will improve performance
