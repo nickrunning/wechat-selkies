@@ -5,4 +5,11 @@
 <item label="WeChat" icon="/usr/share/icons/hicolor/128x128/apps/wechat.png"><action name="Execute"><command>/scripts/wechat/wechat-restart.sh</command></action></item>
 <item label="QQ" icon="/usr/share/icons/hicolor/512x512/apps/qq.png"><action name="Execute"><command>/scripts/qq/qq-restart.sh</command></action></item>
 </menu>
+<menu id="window-right-click-menu" label="Window">
+<item label="左右对半分"><action name="Execute"><command>python3 /scripts/window_tiler.py split --mode lr --active-side left</command></action></item>
+<item label="上下对半分"><action name="Execute"><command>python3 /scripts/window_tiler.py split --mode tb --active-side top</command></action></item>
+<item label="都全屏"><action name="Execute"><command>python3 /scripts/window_tiler.py split --mode fullscreen</command></action></item>
+<separator/>
+<item label="More Window Actions"><action name="ShowMenu"><menu>client-menu</menu></action></item>
+</menu>
 </openbox_menu>

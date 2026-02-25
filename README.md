@@ -34,6 +34,16 @@
 - 🔧 **硬件加速**：可选的 GPU 硬件加速支持
 - 🪟 **窗口切换器**：左上角增加切换悬浮窗，方便切换到后台窗口，为后续添加其它功能做基础
 - 🤖 **自动启动**：可配置自动启动微信和QQ客户端（可选）
+- 🔐 **单会话接管**：新客户端登录后会踢下旧客户端并退回 PIN 页面
+
+## 近期新增特性
+
+- **AMD GPU 支持**：优先支持 `/dev/dri` 的 VAAPI 硬件编码路径（不可用时自动回退 CPU）。
+- **简化 PIN 登录**：登录页仅保留 PIN 密码输入，去除账号输入流程。
+- **增强图片复制/粘贴**：支持浏览器 `Ctrl+V` 图片直达远端剪贴板并可自动粘贴到聊天输入框。
+- **自动分屏工具**：新增窗口右键分屏和悬浮分屏工具，支持左右对半分、上下对半分、都全屏三种模式。
+- **低延迟优化**：默认参数与编码策略针对交互延迟优化，并增加卡流自动恢复与 X11 自愈机制。
+- **QQ 新特性支持**：镜像构建阶段自动解析并安装最新 Linux QQ，叠加卡死检测与自动拉起能力。
 
 ## 截图展示
 ![微信截图](./docs/images/wechat-selkies-1.jpg)
@@ -78,14 +88,33 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
       wechat-selkies:
         image: nickrunning/wechat-selkies:latest    # or ghcr.io/nickrunning/wechat-selkies:latest
         container_name: wechat-selkies
+        init: true
         ports:
           - "3000:3000"       # http port
           - "3001:3001"       # https port
         restart: unless-stopped
+        stop_grace_period: 1m
         volumes:
           - ./config:/config
         devices:
           - /dev/dri:/dev/dri # optional, for hardware acceleration
+        pids_limit: 4096
+        ulimits:
+          nofile:
+            soft: 65536
+            hard: 65536
+          nproc: 8192
+        healthcheck:
+          test: ["CMD-SHELL", "/scripts/healthcheck.sh"]
+          interval: 30s
+          timeout: 10s
+          retries: 5
+          start_period: 120s
+        logging:
+          driver: json-file
+          options:
+            max-size: "20m"
+            max-file: "5"
         environment:
           - PUID=1000                    # user ID, set according to your system
           - PGID=100                     # group ID, set according to your system
@@ -93,8 +122,37 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
           - LC_ALL=zh_CN.UTF-8           # locale, set according to your needs
           - AUTO_START_WECHAT=true       # default is true
           - AUTO_START_QQ=false          # default is false
-          # - CUSTOM_USER=<Your Name>      # recommended to set a custom user name
-          # - PASSWORD=<Your Password>     # recommended to set a password for selkies web ui
+          - PROCESS_WATCHDOG=true        # process watchdog for long-running stability
+          - WATCHDOG_INTERVAL=10         # watchdog check interval (seconds)
+          - WATCHDOG_TRAY=true           # auto-restart stalonetray
+          - WATCHDOG_RESTART_WECHAT=true # auto-restart WeChat when process exits
+          - WATCHDOG_RESTART_QQ=true     # auto-restart QQ when process exits
+          - WECHAT_IDLE_KEEPALIVE=true   # idle-time WeChat keepalive poke
+          - WECHAT_KEEPALIVE_INTERVAL=300      # keepalive interval in seconds
+          - WECHAT_KEEPALIVE_IDLE_SECONDS=300  # only run keepalive when idle >= this value
+          - QQ_EXTRA_FLAGS=--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer
+          - QQ_NICE_LEVEL=-2             # process nice level, lower value = higher priority (requires permission)
+          - QQ_WATCHDOG_HANG_DETECT=true
+          - QQ_WATCHDOG_FAIL_THRESHOLD=3
+          - QQ_WATCHDOG_X11_PING=true
+          - QQ_WATCHDOG_X11_TIMEOUT=2
+          - DRI_NODE=/dev/dri/renderD128 # preferred render node for VAAPI
+          - SELKIES_ENABLE_BINARY_CLIPBOARD=true
+          - SELKIES_PASTE_IMAGE=true
+          - SELKIES_DEFAULT_ENCODER=x264enc
+          - SELKIES_DEFAULT_FRAMERATE=48
+          - SELKIES_DEFAULT_GAMEPAD_ENABLED=false
+          - SELKIES_DEFAULT_BINARY_CLIPBOARD=true
+          - SELKIES_DEFAULT_USE_CPU=false
+          - SELKIES_DEFAULT_H264_STREAMING_MODE=true
+          - SELKIES_DEFAULT_USE_PAINT_OVER_QUALITY=false
+          - SELKIES_DEFAULT_H264_CRF=30
+          - SELKIES_STREAM_WAIT_THRESHOLD_MS=35000
+          - SELKIES_STREAM_RECOVER_COOLDOWN_MS=120000
+          # - CUSTOM_USER=<Your Name>      # legacy field; kept for compatibility
+          # - PASSWORD=<Your PIN>          # PIN 登录（仅密码输入，无需账号）
+        mem_reservation: "1g"            # reduce OOM risk during long-running idle sessions
+        mem_limit: "2g"                  # hard limit, adjust by host capacity
         shm_size: "1gb"                  # recommended, will improve performance
     ```
 3. **启动服务**
@@ -144,18 +202,43 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
 | `PGID` | `100` | 组 ID |
 | `TZ` | `Asia/Shanghai` | 时区设置 |
 | `LC_ALL` | `zh_CN.UTF-8` | 语言环境 |
-| `CUSTOM_USER` | - | 自定义用户名（推荐设置） |
-| `PASSWORD` | - | Web UI 访问密码（推荐设置） |
+| `CUSTOM_USER` | - | 兼容旧配置字段（PIN 模式下不需要） |
+| `PASSWORD` | - | Web UI PIN 码（仅密码输入，无需账号） |
 | `AUTO_START_WECHAT` | `true` | 是否自动启动微信客户端 |
 | `AUTO_START_QQ` | `false` | 是否自动启动 QQ 客户端 |
-| `SELKIES_ENABLE_BINARY_CLIPBOARD` | `false` | 启用二进制剪贴板（图片等） |
-| `SELKIES_PASTE_IMAGE` | `false` | 启用浏览器内 Ctrl+V 图片粘贴 |
+| `PROCESS_WATCHDOG` | `true` | 启用容器内进程看门狗 |
+| `WATCHDOG_INTERVAL` | `10` | 看门狗巡检间隔（秒） |
+| `WATCHDOG_TRAY` | `true` | 自动拉起 stalonetray 托盘进程 |
+| `WATCHDOG_RESTART_WECHAT` | `true` | 微信进程退出后自动重启 |
+| `WATCHDOG_RESTART_QQ` | `true` | QQ 进程退出后自动重启（仅在 AUTO_START_QQ=true 时） |
+| `WECHAT_IDLE_KEEPALIVE` | `true` | 空闲时定时激活微信窗口并触发轻量按键，降低隔夜掉线概率 |
+| `WECHAT_KEEPALIVE_INTERVAL` | `300` | 微信保活巡检间隔（秒） |
+| `WECHAT_KEEPALIVE_IDLE_SECONDS` | `300` | 仅当会话空闲超过该阈值时执行保活（秒） |
+| `QQ_EXTRA_FLAGS` | `--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer` | QQ 启动附加参数（降低 GPU 导致的卡死概率） |
+| `QQ_NICE_LEVEL` | `-2` | QQ 进程 nice 优先级（-20 到 19） |
+| `QQ_WATCHDOG_HANG_DETECT` | `true` | 启用 QQ 卡死检测（进程存在但窗口不响应） |
+| `QQ_WATCHDOG_FAIL_THRESHOLD` | `3` | 连续失败达到阈值后重启 QQ |
+| `QQ_WATCHDOG_X11_PING` | `true` | 通过 X11 查询窗口名检测 QQ 窗口响应性 |
+| `QQ_WATCHDOG_X11_TIMEOUT` | `2` | X11 响应检测超时（秒） |
+| `DRI_NODE` | `/dev/dri/renderD128` | VAAPI 渲染节点路径（存在时优先尝试 GPU 编码） |
+| `SELKIES_ENABLE_BINARY_CLIPBOARD` | `true` | 启用二进制剪贴板（图片等） |
+| `SELKIES_PASTE_IMAGE` | `true` | 启用浏览器内 Ctrl+V 图片粘贴 |
 | `SELKIES_PASTE_IMAGE_MAX_SIZE` | `20971520` | 图片粘贴最大字节数（默认 20MB） |
 | `SELKIES_PASTE_IMAGE_AUTO_PASTE` | `true` | 写入远端剪贴板后自动发送 Ctrl+V |
+| `SELKIES_DEFAULT_ENCODER` | `x264enc` | 默认编码器（低延迟优先，稳定模式） |
+| `SELKIES_DEFAULT_FRAMERATE` | `48` | 默认帧率 |
+| `SELKIES_DEFAULT_GAMEPAD_ENABLED` | `false` | 触控手柄默认开关 |
+| `SELKIES_DEFAULT_BINARY_CLIPBOARD` | `true` | 前端侧二进制剪贴板默认开关 |
+| `SELKIES_DEFAULT_USE_CPU` | `false` | 默认优先 VAAPI 编码（无 DRI 时自动回退 CPU） |
+| `SELKIES_DEFAULT_H264_STREAMING_MODE` | `true` | 默认开启 H264 streaming mode（降低端到端延迟） |
+| `SELKIES_DEFAULT_USE_PAINT_OVER_QUALITY` | `false` | 默认关闭静态场景高质量叠加（降低突发延迟） |
+| `SELKIES_DEFAULT_H264_CRF` | `30` | 默认 H264 CRF（优先降低编码负载与输入延迟） |
+| `SELKIES_STREAM_WAIT_THRESHOLD_MS` | `35000` | 页面处于 `Waiting for stream...` 且无视频流时，自动恢复阈值（毫秒） |
+| `SELKIES_STREAM_RECOVER_COOLDOWN_MS` | `120000` | 自动恢复冷却时间（毫秒，防止循环刷新） |
 
 #### 图片粘贴（Ctrl+V）
 
-启用该功能需同时开启 Selkies 二进制剪贴板与本功能开关：
+该功能默认启用；如需显式声明，保持以下配置为 `true`：
 
 - `SELKIES_ENABLE_BINARY_CLIPBOARD=true`
 - `SELKIES_PASTE_IMAGE=true`
@@ -170,6 +253,27 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
 - 仅在用户触发粘贴（Ctrl+V 或浏览器粘贴事件）时读取剪贴板
 - 需要 HTTPS 或 localhost 才能使用 Clipboard API
 - 目前至少支持 `image/png`，其它格式视客户端/微信支持情况而定
+
+#### 单会话接管（新连接踢旧连接）
+
+- 当有新的客户端成功接入时，已有客户端会被强制断开并跳回 PIN 登录页。
+- 该策略用于避免多客户端抢占导致的 `Waiting for stream...` 与会话混乱。
+
+#### 编码器模式显示与 VAAPI 回退
+
+- 默认编码器采用策略：`x264enc` + `use_cpu=false`（优先 VAAPI）。
+- 视频设置里的编码器下拉框旁会显示当前模式徽标：`VAAPI` 或 `CPU`。
+- 已移除会导致黑屏的实验编码器注入项（`vaapih264enc`、`vaapih265enc`、`vaapivp9enc`、`vaav1enc`）。
+- 编码模式徽标会在首屏加载、编码器切换以及每次重新打开侧边栏/视频设置时自动刷新为 `CPU` 或 `VAAPI`。
+- 长时间空闲后若页面卡在 `Waiting for stream...`，前端会在阈值后自动执行一次恢复刷新（受上述两个环境变量控制）。
+
+#### QQ 版本与性能说明
+
+- 镜像构建阶段会从腾讯 Linux QQ 官方配置 `linuxConfig.js` 解析最新 deb 下载地址，优先安装最新版本，解析失败时才回退到内置版本链接。
+- 若 QQ 仍然卡顿，可先尝试：
+  - 增大 `shm_size` 与 `mem_limit`
+  - 调整 `QQ_EXTRA_FLAGS`
+  - 适度降低 `QQ_NICE_LEVEL`（例如 `-5`，需要容器内允许设置优先级）
 
 #### 端口配置
 
@@ -214,6 +318,14 @@ wechat-selkies/
 1. **无法访问 Web UI**
    - 检查端口 3001 是否被占用
    - 确认 Docker 容器正常运行：`docker ps`
+
+### 微信夜间“为了账号安全已退出登录”排查
+
+- 文档：`docs/ops/wechat-overnight-security-exit.md`
+- 单次证据采集：
+  - `powershell -ExecutionPolicy Bypass -File scripts/ops/collect-overnight-evidence.ps1 -ContainerName wechat-selkies`
+- 7晚汇总验收：
+  - `powershell -ExecutionPolicy Bypass -File scripts/ops/summarize-overnight-evidence.ps1 -InputDir diagnostics/overnight -WindowSize 7`
 
 ### 日志查看
 

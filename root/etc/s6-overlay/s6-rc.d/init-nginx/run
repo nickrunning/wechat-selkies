@@ -1,0 +1,225 @@
+#!/usr/bin/with-contenv bash
+
+set -euo pipefail
+
+# nginx Path
+NGINX_CONFIG=/etc/nginx/sites-available/default
+
+# user passed env vars
+CPORT="${CUSTOM_PORT:-3000}"
+CHPORT="${CUSTOM_HTTPS_PORT:-3001}"
+CWS="${CUSTOM_WS_PORT:-8082}"
+SFOLDER="${SUBFOLDER:-/}"
+FILE_MANAGER_PATH="${FILE_MANAGER_PATH:-$HOME/Desktop}"
+DASHBOARD="${DASHBOARD:-selkies-dashboard}"
+SELKIES_FILE_TRANSFERS="${SELKIES_FILE_TRANSFERS:-upload,download}"
+HARDEN_DESKTOP="${HARDEN_DESKTOP:-false}"
+
+normalize_subfolder() {
+  local folder="$1"
+  if [ -z "$folder" ]; then
+    echo "/"
+    return
+  fi
+  if [[ "$folder" != /* ]]; then
+    folder="/$folder"
+  fi
+  if [[ "$folder" != */ ]]; then
+    folder="$folder/"
+  fi
+  echo "$folder"
+}
+
+escape_sed_replacement() {
+  printf '%s' "$1" | sed -e 's/[\/&]/\\&/g'
+}
+
+escape_nginx_double_quoted() {
+  printf '%s' "$1" | sed -e 's/[\\"]/\\&/g' -e 's/\$/\\$/g'
+}
+
+SFOLDER="$(normalize_subfolder "$SFOLDER")"
+PW_PREFIX="$SFOLDER"
+PW_COOKIE_PATH="$SFOLDER"
+PW_ENABLED="0"
+PW_TOKEN="disabled"
+PW_PASSWORD_ESCAPED=""
+if [ -n "${PASSWORD:-}" ]; then
+  PW_ENABLED="1"
+  PW_TOKEN="$(printf '%s' "${PASSWORD}" | sha256sum | awk '{print $1}')"
+  PW_PASSWORD_ESCAPED="$(escape_nginx_double_quoted "${PASSWORD}")"
+fi
+
+# create self signed cert
+if [ ! -f "/config/ssl/cert.pem" ]; then
+  mkdir -p /config/ssl
+  openssl req -new -x509 \
+    -days 3650 -nodes \
+    -out /config/ssl/cert.pem \
+    -keyout /config/ssl/cert.key \
+    -subj "/C=US/ST=CA/L=Carlsbad/O=Linuxserver.io/OU=LSIO Server/CN=*"
+  chmod 600 /config/ssl/cert.key
+  chown -R abc:abc /config/ssl
+fi
+
+# modify nginx config
+cp /defaults/default.conf "${NGINX_CONFIG}"
+sed -i "s/3000/$CPORT/g" "${NGINX_CONFIG}"
+sed -i "s/3001/$CHPORT/g" "${NGINX_CONFIG}"
+sed -i "s/CWS/$CWS/g" "${NGINX_CONFIG}"
+sed -i "s|SUBFOLDER|$SFOLDER|g" "${NGINX_CONFIG}"
+sed -i "s|REPLACE_DOWNLOADS_PATH|$FILE_MANAGER_PATH|g" "${NGINX_CONFIG}"
+s6-setuidgid abc mkdir -p "${FILE_MANAGER_PATH}"
+if [[ $SELKIES_FILE_TRANSFERS != *"download"* ]] || [[ ${HARDEN_DESKTOP,,} == "true" ]]; then
+  sed -i '/files {/,/^  }/d' "${NGINX_CONFIG}"
+fi
+if [ -n "${DISABLE_IPV6+x}" ]; then
+  sed -i '/listen \[::\]/d' "${NGINX_CONFIG}"
+fi
+if [ -n "${DEV_MODE+x}" ]; then
+  sed -i \
+    -e 's:location / {:location /null {:g' \
+    -e 's:location /devmode:location /:g' \
+    "${NGINX_CONFIG}"
+fi
+
+sed -i "s/PW_ENABLED/${PW_ENABLED}/g" "${NGINX_CONFIG}"
+sed -i "s/PW_TOKEN/$(escape_sed_replacement "$PW_TOKEN")/g" "${NGINX_CONFIG}"
+sed -i "s|PW_PREFIX|$(escape_sed_replacement "$PW_PREFIX")|g" "${NGINX_CONFIG}"
+sed -i "s|PW_COOKIE_PATH|$(escape_sed_replacement "$PW_COOKIE_PATH")|g" "${NGINX_CONFIG}"
+sed -i "s/PW_PASSWORD/$(escape_sed_replacement "$PW_PASSWORD_ESCAPED")/g" "${NGINX_CONFIG}"
+
+cat > /usr/share/selkies/www/password-login.html <<EOF
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${TITLE:-Selkies} - PIN</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at top, #1e293b, #0b1220 55%);
+      color: #e2e8f0;
+    }
+    .card {
+      width: min(92vw, 360px);
+      padding: 24px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.88);
+      box-shadow: 0 10px 35px rgba(2, 6, 23, 0.45);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    h1 { margin: 0 0 14px; font-size: 18px; font-weight: 600; }
+    .hint { margin: 0 0 14px; color: #cbd5e1; font-size: 13px; }
+    input[type=password] {
+      width: 100%;
+      box-sizing: border-box;
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.7);
+      color: #f8fafc;
+      font-size: 14px;
+    }
+    button {
+      width: 100%;
+      padding: 10px 12px;
+      border: 0;
+      border-radius: 8px;
+      background: #0ea5e9;
+      color: #f8fafc;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .err { margin: 0 0 12px; color: #fca5a5; font-size: 13px; min-height: 18px; }
+  </style>
+</head>
+<body>
+  <form class="card" id="pinForm" autocomplete="off">
+    <h1>请输入 PIN 码</h1>
+    <p class="hint">仅需 PIN 码，无需账号。</p>
+    <p class="err" id="err"></p>
+    <input type="password" id="pin" placeholder="PIN" required autofocus>
+    <button type="submit">解锁</button>
+  </form>
+  <script>
+    const pinForm = document.getElementById("pinForm");
+    const pinInput = document.getElementById("pin");
+    const errEl = document.getElementById("err");
+    const pinApi = "${PW_PREFIX}auth/pin";
+    pinForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errEl.textContent = "";
+      const pin = pinInput.value || "";
+      if (!pin) {
+        errEl.textContent = "PIN 不能为空";
+        return;
+      }
+      try {
+        const resp = await fetch(pinApi, {
+          method: "POST",
+          headers: { "X-PIN": pin, "X-Requested-With": "XMLHttpRequest" },
+          credentials: "same-origin"
+        });
+        if (!resp.ok) {
+          errEl.textContent = "PIN 错误，请重试";
+          pinInput.focus();
+          pinInput.select();
+          return;
+        }
+        const pageResp = await fetch(window.location.href, {
+          credentials: "same-origin",
+          cache: "no-store"
+        });
+        const html = await pageResp.text();
+        document.open();
+        document.write(html);
+        document.close();
+      } catch (_) {
+        errEl.textContent = "网络异常，请稍后再试";
+      }
+    });
+  </script>
+</body>
+</html>
+EOF
+
+# set dashboard and icon
+rm -Rf \
+  /usr/share/selkies/web
+cp -a \
+  /usr/share/selkies/"$DASHBOARD" \
+  /usr/share/selkies/web
+sed -i "s|REPLACE_DOWNLOADS_PATH|$FILE_MANAGER_PATH|g" /usr/share/selkies/web/nginx/footer.html
+cp \
+  /usr/share/selkies/www/icon.png \
+  /usr/share/selkies/web/favicon.ico
+cp \
+  /usr/share/selkies/www/icon.png \
+  /usr/share/selkies/web/icon.png
+# manifest creation
+echo "{
+  \"name\": \"${TITLE}\",
+  \"short_name\": \"${TITLE}\",
+  \"manifest_version\": 2,
+  \"version\": \"1.0.0\",
+  \"display\": \"fullscreen\",
+  \"background_color\": \"#000000\",
+  \"theme_color\": \"#000000\",
+  \"icons\": [
+    {
+      \"src\": \"icon.png\",
+      \"type\": \"image/png\",
+      \"sizes\": \"180x180\"
+    }
+  ],
+  \"start_url\": \"/\"
+}" > /usr/share/selkies/web/manifest.json

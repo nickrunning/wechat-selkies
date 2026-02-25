@@ -1,0 +1,2 @@
+*.sh text eol=lf
+root/etc/cont-init.d/* text eol=lf

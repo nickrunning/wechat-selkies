@@ -1,1 +1,4 @@
 /config/
+/dist/
+/diagnostics/
+**/__pycache__/

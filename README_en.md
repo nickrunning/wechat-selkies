@@ -33,6 +33,16 @@ This project packages the official WeChat/QQ Linux client in a Docker container,
 - 🖥️ **AMD64 and ARM64 Architecture Support**: Compatible with mainstream CPU architectures
 - 🔧 **Hardware Acceleration**: Optional GPU hardware acceleration support
 - 🪟 **Window Switcher**: Added a floating window switcher in the top left corner for easy switching to background windows, laying the foundation for adding other features in the future
+- 🔐 **Single-Session Takeover**: A new client login disconnects old clients and returns them to the PIN page
+
+## Recent Updates
+
+- **AMD GPU Support**: Prefer VAAPI hardware encoding via `/dev/dri` with automatic CPU fallback.
+- **Simplified PIN Login**: Password-only PIN page, no username field.
+- **Improved Image Copy/Paste**: Browser `Ctrl+V` image paste to remote clipboard with optional auto-paste into chat input.
+- **Auto Split Tooling**: Window right-click split plus floating split tool with three modes: left/right half, top/bottom half, and both fullscreen.
+- **Low-Latency Optimization**: Tuned defaults for interaction latency, plus stream auto-recovery and X11 self-healing.
+- **New QQ Support Enhancements**: Build-time latest Linux QQ URL resolution, hang detection, and auto-restart.
 
 ## Screenshots
 ![WeChat Screenshot](./docs/images/wechat-selkies-1.jpg)
@@ -75,14 +85,33 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
       wechat-selkies:
         image: nickrunning/wechat-selkies:latest    # or ghcr.io/nickrunning/wechat-selkies:latest
         container_name: wechat-selkies
+        init: true
         ports:
           - "3000:3000"       # http port
           - "3001:3001"       # https port
         restart: unless-stopped
+        stop_grace_period: 1m
         volumes:
           - ./config:/config
         devices:
           - /dev/dri:/dev/dri # optional, for hardware acceleration
+        pids_limit: 4096
+        ulimits:
+          nofile:
+            soft: 65536
+            hard: 65536
+          nproc: 8192
+        healthcheck:
+          test: ["CMD-SHELL", "/scripts/healthcheck.sh"]
+          interval: 30s
+          timeout: 10s
+          retries: 5
+          start_period: 120s
+        logging:
+          driver: json-file
+          options:
+            max-size: "20m"
+            max-file: "5"
         environment:
           - PUID=1000                    # user ID, set according to your system
           - PGID=100                     # group ID, set according to your system
@@ -90,8 +119,37 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
           - LC_ALL=zh_CN.UTF-8           # locale, set according to your needs
           - AUTO_START_WECHAT=true       # default is true
           - AUTO_START_QQ=false          # default is false
-          # - CUSTOM_USER=<Your Name>      # recommended to set a custom user name
-          # - PASSWORD=<Your Password>     # recommended to set a password for selkies web ui
+          - PROCESS_WATCHDOG=true        # process watchdog for long-running stability
+          - WATCHDOG_INTERVAL=10         # watchdog check interval (seconds)
+          - WATCHDOG_TRAY=true           # auto-restart stalonetray
+          - WATCHDOG_RESTART_WECHAT=true # auto-restart WeChat when process exits
+          - WATCHDOG_RESTART_QQ=true     # auto-restart QQ when process exits
+          - WECHAT_IDLE_KEEPALIVE=true   # idle-time WeChat keepalive poke
+          - WECHAT_KEEPALIVE_INTERVAL=300      # keepalive interval in seconds
+          - WECHAT_KEEPALIVE_IDLE_SECONDS=300  # only run keepalive when idle >= this value
+          - QQ_EXTRA_FLAGS=--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer
+          - QQ_NICE_LEVEL=-2             # process nice level, lower value = higher priority (requires permission)
+          - QQ_WATCHDOG_HANG_DETECT=true
+          - QQ_WATCHDOG_FAIL_THRESHOLD=3
+          - QQ_WATCHDOG_X11_PING=true
+          - QQ_WATCHDOG_X11_TIMEOUT=2
+          - DRI_NODE=/dev/dri/renderD128 # preferred render node for VAAPI
+          - SELKIES_ENABLE_BINARY_CLIPBOARD=true
+          - SELKIES_PASTE_IMAGE=true
+          - SELKIES_DEFAULT_ENCODER=x264enc
+          - SELKIES_DEFAULT_FRAMERATE=48
+          - SELKIES_DEFAULT_GAMEPAD_ENABLED=false
+          - SELKIES_DEFAULT_BINARY_CLIPBOARD=true
+          - SELKIES_DEFAULT_USE_CPU=false
+          - SELKIES_DEFAULT_H264_STREAMING_MODE=true
+          - SELKIES_DEFAULT_USE_PAINT_OVER_QUALITY=false
+          - SELKIES_DEFAULT_H264_CRF=30
+          - SELKIES_STREAM_WAIT_THRESHOLD_MS=35000
+          - SELKIES_STREAM_RECOVER_COOLDOWN_MS=120000
+          # - CUSTOM_USER=<Your Name>      # legacy field; kept for compatibility
+          # - PASSWORD=<Your PIN>          # PIN login (password only, no username input)
+        mem_reservation: "1g"            # reduce OOM risk during long-running idle sessions
+        mem_limit: "2g"                  # hard limit, adjust by host capacity
         shm_size: "1gb"                  # recommended, will improve performance
     ```
 3. **Start the service**
@@ -141,18 +199,43 @@ Configure the following environment variables in `docker-compose.yml`:
 | `PGID` | `100` | Group ID |
 | `TZ` | `Asia/Shanghai` | Timezone setting |
 | `LC_ALL` | `zh_CN.UTF-8` | Locale setting |
-| `CUSTOM_USER` | - | Custom username (recommended) |
-| `PASSWORD` | - | Web UI access password (recommended) |
+| `CUSTOM_USER` | - | Legacy compatibility field (not required in PIN mode) |
+| `PASSWORD` | - | Web UI PIN (password-only login, no username input) |
 | `AUTO_START_WECHAT` | `true` | Whether to automatically start the WeChat client |
 | `AUTO_START_QQ` | `false` | Whether to automatically start the QQ client |
-| `SELKIES_ENABLE_BINARY_CLIPBOARD` | `false` | Enable binary clipboard (images, etc.) |
-| `SELKIES_PASTE_IMAGE` | `false` | Enable Ctrl+V image paste in browser |
+| `PROCESS_WATCHDOG` | `true` | Enable in-container process watchdog |
+| `WATCHDOG_INTERVAL` | `10` | Watchdog check interval in seconds |
+| `WATCHDOG_TRAY` | `true` | Auto-restart the stalonetray process |
+| `WATCHDOG_RESTART_WECHAT` | `true` | Auto-restart WeChat if process exits |
+| `WATCHDOG_RESTART_QQ` | `true` | Auto-restart QQ if process exits (only when AUTO_START_QQ=true) |
+| `WECHAT_IDLE_KEEPALIVE` | `true` | Periodically activate WeChat when session is idle to reduce overnight logout probability |
+| `WECHAT_KEEPALIVE_INTERVAL` | `300` | WeChat keepalive check interval in seconds |
+| `WECHAT_KEEPALIVE_IDLE_SECONDS` | `300` | Run keepalive only when user idle time exceeds this threshold |
+| `QQ_EXTRA_FLAGS` | `--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer` | Extra QQ launch flags to reduce GPU-related hangs |
+| `QQ_NICE_LEVEL` | `-2` | Nice level for QQ process (-20 to 19) |
+| `QQ_WATCHDOG_HANG_DETECT` | `true` | Enable QQ hang detection (process alive but window unresponsive) |
+| `QQ_WATCHDOG_FAIL_THRESHOLD` | `3` | Restart QQ after this many consecutive healthcheck failures |
+| `QQ_WATCHDOG_X11_PING` | `true` | Use X11 window-title probe for QQ responsiveness checks |
+| `QQ_WATCHDOG_X11_TIMEOUT` | `2` | X11 probe timeout in seconds |
+| `DRI_NODE` | `/dev/dri/renderD128` | VAAPI render node path (GPU encoding is preferred when available) |
+| `SELKIES_ENABLE_BINARY_CLIPBOARD` | `true` | Enable binary clipboard (images, etc.) |
+| `SELKIES_PASTE_IMAGE` | `true` | Enable Ctrl+V image paste in browser |
 | `SELKIES_PASTE_IMAGE_MAX_SIZE` | `20971520` | Max image size in bytes (default 20MB) |
 | `SELKIES_PASTE_IMAGE_AUTO_PASTE` | `true` | Auto-trigger remote Ctrl+V after clipboard write |
+| `SELKIES_DEFAULT_ENCODER` | `x264enc` | Default encoder (stable, low-latency profile) |
+| `SELKIES_DEFAULT_FRAMERATE` | `48` | Default frame rate |
+| `SELKIES_DEFAULT_GAMEPAD_ENABLED` | `false` | Default touch gamepad toggle |
+| `SELKIES_DEFAULT_BINARY_CLIPBOARD` | `true` | Frontend default for binary clipboard toggle |
+| `SELKIES_DEFAULT_USE_CPU` | `false` | Prefer VAAPI encoding by default (fallback to CPU when DRI is unavailable) |
+| `SELKIES_DEFAULT_H264_STREAMING_MODE` | `true` | Enable H264 streaming mode by default (lower end-to-end latency) |
+| `SELKIES_DEFAULT_USE_PAINT_OVER_QUALITY` | `false` | Disable static-scene paint-over quality by default (less latency spikes) |
+| `SELKIES_DEFAULT_H264_CRF` | `30` | Default H264 CRF tuned to lower encode load and input delay |
+| `SELKIES_STREAM_WAIT_THRESHOLD_MS` | `35000` | Auto-recovery threshold in milliseconds when UI is stuck on `Waiting for stream...` |
+| `SELKIES_STREAM_RECOVER_COOLDOWN_MS` | `120000` | Auto-recovery cooldown in milliseconds to avoid refresh loops |
 
 #### Image Paste (Ctrl+V)
 
-To enable image paste, turn on binary clipboard and the feature flag:
+Image paste is enabled by default. If you want to set it explicitly, keep these values as `true`:
 
 - `SELKIES_ENABLE_BINARY_CLIPBOARD=true`
 - `SELKIES_PASTE_IMAGE=true`
@@ -167,6 +250,27 @@ Notes:
 - Clipboard is only read on user paste (Ctrl+V or paste event)
 - HTTPS or localhost is required for the Clipboard API
 - At least `image/png` is supported; other formats depend on client/WeChat
+
+#### Single-Session Takeover (new client kicks old clients)
+
+- When a new client successfully connects, existing clients are force-disconnected and redirected back to the PIN login page.
+- This helps avoid multi-client contention that can lead to `Waiting for stream...` and unstable sessions.
+
+#### Encoder Mode Badge and VAAPI Fallback
+
+- The default encoder profile is `x264enc` + `use_cpu=false` (prefer VAAPI).
+- A `VAAPI`/`CPU` badge is displayed next to the encoder selector in video settings.
+- Experimental injected encoder options that could cause black screen were removed (`vaapih264enc`, `vaapih265enc`, `vaapivp9enc`, `vaav1enc`).
+- The mode badge refreshes on initial load, encoder switches, and each sidebar/video-settings reopen as `CPU` or `VAAPI`.
+- If the page is stuck on `Waiting for stream...` after long idle, the frontend performs one automatic recovery reload after threshold (controlled by the two env vars above).
+
+#### QQ Version and Performance Notes
+
+- During image build, QQ deb URL is resolved from Tencent Linux QQ official config `linuxConfig.js` and installs the latest available package; static fallback URL is only used when parsing fails.
+- If QQ is still laggy, try:
+  - increasing `shm_size` and `mem_limit`
+  - tuning `QQ_EXTRA_FLAGS`
+  - setting a lower `QQ_NICE_LEVEL` (for example `-5`, requires permission)
 
 #### Port Configuration
 
@@ -212,6 +316,14 @@ wechat-selkies/
 1. **Unable to access Web UI**
    - Check if port 3001 is occupied
    - Confirm Docker container is running normally: `docker ps`
+
+### Overnight Security Logout Diagnosis
+
+- Guide: `docs/ops/wechat-overnight-security-exit.md`
+- Collect one evidence batch:
+  - `powershell -ExecutionPolicy Bypass -File scripts/ops/collect-overnight-evidence.ps1 -ContainerName wechat-selkies`
+- Generate 7-night summary:
+  - `powershell -ExecutionPolicy Bypass -File scripts/ops/summarize-overnight-evidence.ps1 -InputDir diagnostics/overnight -WindowSize 7`
 
 ### Log Viewing
 

@@ -1,0 +1,26 @@
+#!/usr/bin/with-contenv bash
+set -e
+
+python3 - <<'PY'
+import pathlib
+
+target = pathlib.Path("/etc/s6-overlay/s6-rc.d/svc-xorg/run")
+text = target.read_text(encoding="utf-8")
+
+if "-maxclients" in text:
+    print("[xvfb-patch] -maxclients already present")
+    raise SystemExit(0)
+
+needle = "    -shmem \\\n    ${VFBCOMMAND}"
+if needle not in text:
+    print("[xvfb-patch] warning: patch target not found; skipping")
+    raise SystemExit(0)
+
+patched = text.replace(
+    needle,
+    "    -shmem \\\n    -maxclients 1024 \\\n    ${VFBCOMMAND}",
+    1,
+)
+target.write_text(patched, encoding="utf-8")
+print("[xvfb-patch] patched svc-xorg run with -maxclients 1024")
+PY

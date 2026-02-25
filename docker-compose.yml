@@ -5,6 +5,7 @@ services:
       context: .
     image: wechat-selkies:latest
     container_name: wechat-selkies
+    init: true
     volumes:
       - ./config:/config
     devices:
@@ -13,13 +14,61 @@ services:
       - "3000:3000"       # http port
       - "3001:3001"       # https port
     restart: unless-stopped
+    stop_grace_period: 1m
+    mem_reservation: "1g" # reduce OOM risk during long-running idle sessions
+    mem_limit: "2g"       # hard limit; increase if host has enough memory
+    pids_limit: 4096
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+      nproc: 8192
+    healthcheck:
+      test: ["CMD-SHELL", "/scripts/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     environment:
       - PUID=1000         # set user id according to your system
       - PGID=100          # set group id according to your system
-      # - CUSTOM_USER=<Your Name>   # recommended to set a custom user name
-      # - PASSWORD=<Your Password>  # recommended to set a password for selkies web ui
-      # - SELKIES_ENABLE_BINARY_CLIPBOARD=true  # required for image paste
-      # - SELKIES_PASTE_IMAGE=true              # enable Ctrl+V image paste
+      - PROCESS_WATCHDOG=true
+      - WATCHDOG_INTERVAL=10
+      - WATCHDOG_TRAY=true
+      - WATCHDOG_RESTART_WECHAT=true
+      - WATCHDOG_RESTART_QQ=true
+      - X11_WATCHDOG=true
+      - X11_WATCHDOG_FAIL_THRESHOLD=2
+      - X11_HEALTHCHECK_TIMEOUT=2
+      - WECHAT_IDLE_KEEPALIVE=true
+      - WECHAT_KEEPALIVE_INTERVAL=300
+      - WECHAT_KEEPALIVE_IDLE_SECONDS=300
+      - QQ_EXTRA_FLAGS=--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer
+      - QQ_NICE_LEVEL=-2
+      - QQ_WATCHDOG_HANG_DETECT=true
+      - QQ_WATCHDOG_FAIL_THRESHOLD=3
+      - QQ_WATCHDOG_X11_PING=true
+      - QQ_WATCHDOG_X11_TIMEOUT=2
+      - DRI_NODE=/dev/dri/renderD128
+      - SELKIES_ENABLE_BINARY_CLIPBOARD=true
+      - SELKIES_PASTE_IMAGE=true
+      - SELKIES_DEFAULT_ENCODER=x264enc
+      - SELKIES_DEFAULT_FRAMERATE=48
+      - SELKIES_DEFAULT_GAMEPAD_ENABLED=false
+      - SELKIES_DEFAULT_BINARY_CLIPBOARD=true
+      - SELKIES_DEFAULT_USE_CPU=false
+      - SELKIES_DEFAULT_H264_STREAMING_MODE=true
+      - SELKIES_DEFAULT_USE_PAINT_OVER_QUALITY=false
+      - SELKIES_DEFAULT_H264_CRF=30
+      - SELKIES_STREAM_WAIT_THRESHOLD_MS=35000
+      - SELKIES_STREAM_RECOVER_COOLDOWN_MS=120000
+      # - CUSTOM_USER=<Your Name>   # legacy field; kept for compatibility
+      # - PASSWORD=<Your PIN>       # PIN-only login (no username input)
       # - SELKIES_PASTE_IMAGE_MAX_SIZE=20971520 # max image size in bytes
       # - SELKIES_PASTE_IMAGE_AUTO_PASTE=false  # disable auto Ctrl+V after write
     shm_size: "1gb"       # recommended, will improve performance

@@ -1,11 +1,23 @@
-﻿#!/usr/bin/with-contenv bash
+#!/usr/bin/with-contenv bash
 set -e
 
 CONFIG_PATH="/usr/share/selkies/selkies-dashboard/src/selkies-paste-config.js"
+RUNTIME_CONFIG_PATH="/usr/share/selkies/selkies-dashboard/src/selkies-runtime-config.js"
 
-ENABLED_RAW="${SELKIES_PASTE_IMAGE:-false}"
+ENABLED_RAW="${SELKIES_PASTE_IMAGE:-true}"
 MAX_BYTES_RAW="${SELKIES_PASTE_IMAGE_MAX_SIZE:-20971520}"
 AUTO_PASTE_RAW="${SELKIES_PASTE_IMAGE_AUTO_PASTE:-true}"
+DEFAULT_FRAMERATE_RAW="${SELKIES_DEFAULT_FRAMERATE:-48}"
+DEFAULT_GAMEPAD_RAW="${SELKIES_DEFAULT_GAMEPAD_ENABLED:-false}"
+DEFAULT_BINARY_CLIPBOARD_RAW="${SELKIES_DEFAULT_BINARY_CLIPBOARD:-true}"
+DEFAULT_ENCODER_RAW="${SELKIES_DEFAULT_ENCODER:-x264enc}"
+DEFAULT_USE_CPU_RAW="${SELKIES_DEFAULT_USE_CPU:-false}"
+DEFAULT_H264_STREAMING_MODE_RAW="${SELKIES_DEFAULT_H264_STREAMING_MODE:-true}"
+DEFAULT_USE_PAINT_OVER_QUALITY_RAW="${SELKIES_DEFAULT_USE_PAINT_OVER_QUALITY:-false}"
+DEFAULT_H264_CRF_RAW="${SELKIES_DEFAULT_H264_CRF:-30}"
+DEFAULT_STREAM_WAIT_THRESHOLD_RAW="${SELKIES_STREAM_WAIT_THRESHOLD_MS:-35000}"
+DEFAULT_STREAM_RECOVER_COOLDOWN_RAW="${SELKIES_STREAM_RECOVER_COOLDOWN_MS:-120000}"
+DRI_NODE_PATH="${DRI_NODE:-/dev/dri/renderD128}"
 
 enabled_js="false"
 case "${ENABLED_RAW,,}" in
@@ -24,6 +36,81 @@ case "${AUTO_PASTE_RAW,,}" in
   *) auto_js="true" ;;
 esac
 
+default_framerate="${DEFAULT_FRAMERATE_RAW}"
+if ! [[ "$default_framerate" =~ ^[0-9]+$ ]] || [ "$default_framerate" -lt 1 ] || [ "$default_framerate" -gt 240 ]; then
+  default_framerate="48"
+fi
+
+default_gamepad_js="false"
+case "${DEFAULT_GAMEPAD_RAW,,}" in
+  true|1|yes|on) default_gamepad_js="true" ;;
+  *) default_gamepad_js="false" ;;
+esac
+
+default_binary_clipboard_js="true"
+case "${DEFAULT_BINARY_CLIPBOARD_RAW,,}" in
+  false|0|no|off) default_binary_clipboard_js="false" ;;
+  *) default_binary_clipboard_js="true" ;;
+esac
+
+default_use_cpu_js="false"
+case "${DEFAULT_USE_CPU_RAW,,}" in
+  false|0|no|off) default_use_cpu_js="false" ;;
+  *) default_use_cpu_js="true" ;;
+esac
+
+default_h264_streaming_mode_js="true"
+case "${DEFAULT_H264_STREAMING_MODE_RAW,,}" in
+  false|0|no|off) default_h264_streaming_mode_js="false" ;;
+  *) default_h264_streaming_mode_js="true" ;;
+esac
+
+default_use_paint_over_quality_js="false"
+case "${DEFAULT_USE_PAINT_OVER_QUALITY_RAW,,}" in
+  true|1|yes|on) default_use_paint_over_quality_js="true" ;;
+  *) default_use_paint_over_quality_js="false" ;;
+esac
+
+default_h264_crf="${DEFAULT_H264_CRF_RAW}"
+if ! [[ "$default_h264_crf" =~ ^[0-9]+$ ]] || [ "$default_h264_crf" -lt 5 ] || [ "$default_h264_crf" -gt 50 ]; then
+  default_h264_crf="30"
+fi
+
+default_stream_wait_threshold_ms="${DEFAULT_STREAM_WAIT_THRESHOLD_RAW}"
+if ! [[ "$default_stream_wait_threshold_ms" =~ ^[0-9]+$ ]] || [ "$default_stream_wait_threshold_ms" -lt 10000 ] || [ "$default_stream_wait_threshold_ms" -gt 300000 ]; then
+  default_stream_wait_threshold_ms="35000"
+fi
+
+default_stream_recover_cooldown_ms="${DEFAULT_STREAM_RECOVER_COOLDOWN_RAW}"
+if ! [[ "$default_stream_recover_cooldown_ms" =~ ^[0-9]+$ ]] || [ "$default_stream_recover_cooldown_ms" -lt 30000 ] || [ "$default_stream_recover_cooldown_ms" -gt 600000 ]; then
+  default_stream_recover_cooldown_ms="120000"
+fi
+
+dri_available_js="false"
+if [ -e "$DRI_NODE_PATH" ] || [ -e "/dev/dri/renderD128" ] || [ -d "/dev/dri" ]; then
+  dri_available_js="true"
+fi
+
+default_encoder="$(echo "$DEFAULT_ENCODER_RAW" | tr '[:upper:]' '[:lower:]')"
+if [ -z "$default_encoder" ] || [ "$default_encoder" = "auto" ]; then
+  default_encoder="x264enc"
+fi
+
+# Keep stable, low-latency encoders only; unsupported injected options can black-screen.
+case "$default_encoder" in
+  x264enc|x264enc-striped|jpeg) ;;
+  *) default_encoder="x264enc" ;;
+esac
+
+if [ "$default_encoder" = "x264enc-striped" ] || [ "$default_encoder" = "jpeg" ]; then
+  default_use_cpu_js="true"
+fi
+
+encoder_mode="CPU"
+if [ "$default_use_cpu_js" = "false" ] && [ "$dri_available_js" = "true" ]; then
+  encoder_mode="VAAPI"
+fi
+
 cat > "$CONFIG_PATH" <<EOF
 window.__SELKIES_PASTE_IMAGE__ = {
   enabled: ${enabled_js},
@@ -32,4 +119,22 @@ window.__SELKIES_PASTE_IMAGE__ = {
 };
 EOF
 
+cat > "$RUNTIME_CONFIG_PATH" <<EOF
+window.__SELKIES_RUNTIME__ = {
+  driAvailable: ${dri_available_js},
+  preferredEncoder: "${default_encoder}",
+  encoderMode: "${encoder_mode}",
+  defaultFramerate: ${default_framerate},
+  defaultUseCpu: ${default_use_cpu_js},
+  defaultH264StreamingMode: ${default_h264_streaming_mode_js},
+  defaultUsePaintOverQuality: ${default_use_paint_over_quality_js},
+  defaultH264Crf: ${default_h264_crf},
+  streamWaitThresholdMs: ${default_stream_wait_threshold_ms},
+  streamRecoverCooldownMs: ${default_stream_recover_cooldown_ms},
+  defaultGamepadEnabled: ${default_gamepad_js},
+  defaultBinaryClipboard: ${default_binary_clipboard_js}
+};
+EOF
+
 chmod 644 "$CONFIG_PATH"
+chmod 644 "$RUNTIME_CONFIG_PATH"

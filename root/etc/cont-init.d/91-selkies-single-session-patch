@@ -1,0 +1,127 @@
+#!/usr/bin/with-contenv bash
+set -e
+
+python3 - <<'PY'
+import pathlib
+import re
+import selkies
+
+selkies_path = pathlib.Path(selkies.__file__).resolve().parent / "selkies.py"
+text = selkies_path.read_text(encoding="utf-8")
+
+if "Session-epoch takeover" in text:
+    print("[selkies-patch] session-epoch takeover already patched")
+    raise SystemExit(0)
+
+pattern_original = re.compile(
+    r"(raddr = websocket\.remote_address\s*\n\s*data_logger\.info\(f\"Data WebSocket connected from \{raddr\}\"\)\s*\n)\s*self\.clients\.add\(websocket\)\s*\n\s*self\.data_ws = \(\s*\n\s*websocket\s*\n\s*\)",
+    re.MULTILINE,
+)
+
+pattern_legacy = re.compile(
+    r"(raddr = websocket\.remote_address\s*\n\s*data_logger\.info\(f\"Data WebSocket connected from \{raddr\}\"\)\s*\n)\s*existing_clients = \[ws for ws in list\(self\.clients\) if ws is not websocket\][\s\S]*?self\.data_ws = \(\s*\n\s*websocket\s*\n\s*\)",
+    re.MULTILINE,
+)
+
+replacement = r"""\1        existing_clients = [ws for ws in list(self.clients) if ws is not websocket]
+        # Session-epoch takeover
+        if not hasattr(self, "_session_epoch_latest"):
+            self._session_epoch_latest = 0
+        if not hasattr(self, "_session_meta"):
+            self._session_meta = {}
+
+        for known_ws in list(self._session_meta.keys()):
+            if known_ws not in self.clients:
+                self._session_meta.pop(known_ws, None)
+
+        ws_path = getattr(websocket, "path", "") or ""
+        ws_query = ws_path.split("?", 1)[1] if "?" in ws_path else ""
+        ws_params = {}
+        for ws_pair in ws_query.split("&"):
+            if not ws_pair:
+                continue
+            if "=" in ws_pair:
+                ws_key, ws_value = ws_pair.split("=", 1)
+            else:
+                ws_key, ws_value = ws_pair, ""
+            ws_params[ws_key] = ws_value
+
+        ws_session_id = ws_params.get("selkies_session_id", "")
+        try:
+            ws_session_epoch = int(ws_params.get("selkies_session_epoch", "0"))
+        except Exception:
+            ws_session_epoch = 0
+
+        ws_identified = bool(ws_session_id) and ws_session_epoch > 0
+        latest_epoch = int(getattr(self, "_session_epoch_latest", 0))
+
+        if ws_identified and ws_session_epoch < latest_epoch:
+            data_logger.info(
+                f"Rejecting stale session websocket: sid={ws_session_id} epoch={ws_session_epoch} latest={latest_epoch}"
+            )
+            try:
+                await websocket.send("FORCE_PIN_LOGIN")
+            except Exception:
+                pass
+            try:
+                await websocket.close(code=4003, reason="Stale session epoch")
+            except Exception:
+                pass
+            return
+
+        if ws_identified and ws_session_epoch >= latest_epoch:
+            self._session_epoch_latest = int(ws_session_epoch)
+
+        if existing_clients:
+            data_logger.info(
+                f"Session-epoch takeover: disconnecting {len(existing_clients)} existing client(s) before accepting {raddr}"
+            )
+            for stale_ws in existing_clients:
+                stale_meta = self._session_meta.get(stale_ws) or {}
+                stale_session_id = stale_meta.get("session_id", "")
+                stale_session_epoch = int(stale_meta.get("session_epoch", 0) or 0)
+                same_session_refresh = (
+                    ws_identified
+                    and stale_session_id == ws_session_id
+                    and stale_session_epoch == ws_session_epoch
+                )
+                if same_session_refresh:
+                    try:
+                        await stale_ws.close(code=4004, reason="Session transport refresh")
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        await stale_ws.send("FORCE_PIN_LOGIN")
+                    except Exception:
+                        pass
+                    try:
+                        await stale_ws.close(code=4002, reason="Replaced by a new client session")
+                    except Exception:
+                        pass
+                self._session_meta.pop(stale_ws, None)
+                self.clients.discard(stale_ws)
+                client_permissions.pop(stale_ws, None)
+        self.clients.add(websocket)
+        if ws_identified:
+            self._session_meta[websocket] = {
+                "session_id": ws_session_id,
+                "session_epoch": int(ws_session_epoch),
+            }
+        else:
+            self._session_meta.pop(websocket, None)
+        self.data_ws = (
+            websocket
+        )"""
+
+patched, count = pattern_original.subn(replacement, text, count=1)
+if count != 1:
+    patched, count = pattern_legacy.subn(replacement, text, count=1)
+
+if count != 1:
+    print("[selkies-patch] warning: ws_handler patch target not found; skipping session-epoch patch")
+    raise SystemExit(0)
+
+selkies_path.write_text(patched, encoding="utf-8")
+print("[selkies-patch] patched session-epoch takeover into ws_handler")
+PY
