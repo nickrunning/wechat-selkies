@@ -43,6 +43,7 @@ This project packages the official WeChat/QQ Linux client in a Docker container,
 - **Auto Split Tooling**: Window right-click split plus floating split tool with three modes: left/right half, top/bottom half, and both fullscreen.
 - **Low-Latency Optimization**: Tuned defaults for interaction latency, plus stream auto-recovery and X11 self-healing.
 - **New QQ Support Enhancements**: Build-time latest Linux QQ URL resolution, hang detection, and auto-restart.
+- **Open Links Locally**: Links triggered inside QQ/WeChat are forwarded and opened by the browser on the local client machine.
 
 ## Screenshots
 ![WeChat Screenshot](./docs/images/wechat-selkies-1.jpg)
@@ -146,6 +147,9 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
           - SELKIES_DEFAULT_H264_CRF=30
           - SELKIES_STREAM_WAIT_THRESHOLD_MS=35000
           - SELKIES_STREAM_RECOVER_COOLDOWN_MS=120000
+          - SELKIES_LOCAL_LINK_OPEN=true
+          - SELKIES_LOCAL_LINK_POLL_INTERVAL_MS=800
+          - LOCAL_LINK_BRIDGE_PORT=38080
           # - CUSTOM_USER=<Your Name>      # legacy field; kept for compatibility
           # - PASSWORD=<Your PIN>          # PIN login (password only, no username input)
         mem_reservation: "1g"            # reduce OOM risk during long-running idle sessions
@@ -232,6 +236,11 @@ Configure the following environment variables in `docker-compose.yml`:
 | `SELKIES_DEFAULT_H264_CRF` | `30` | Default H264 CRF tuned to lower encode load and input delay |
 | `SELKIES_STREAM_WAIT_THRESHOLD_MS` | `35000` | Auto-recovery threshold in milliseconds when UI is stuck on `Waiting for stream...` |
 | `SELKIES_STREAM_RECOVER_COOLDOWN_MS` | `120000` | Auto-recovery cooldown in milliseconds to avoid refresh loops |
+| `SELKIES_LOCAL_LINK_OPEN` | `true` | Enable opening QQ/WeChat links in the local browser on the client side |
+| `SELKIES_LOCAL_LINK_POLL_INTERVAL_MS` | `800` | Frontend polling interval for local-link events (milliseconds) |
+| `LOCAL_LINK_BRIDGE_PORT` | `38080` | In-container local-link bridge service port (must match nginx route) |
+| `LOCAL_LINK_BRIDGE_MAX_EVENTS` | `256` | Local-link event queue capacity (ring buffer) |
+| `LOCAL_LINK_BRIDGE_ALLOWED_SCHEMES` | `http,https,mailto` | Allowed URL schemes forwarded from container apps to local browser |
 
 #### Image Paste (Ctrl+V)
 

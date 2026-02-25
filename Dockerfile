@@ -128,6 +128,12 @@ ENV SELKIES_DEFAULT_USE_PAINT_OVER_QUALITY="false"
 ENV SELKIES_DEFAULT_H264_CRF="30"
 ENV SELKIES_STREAM_WAIT_THRESHOLD_MS="35000"
 ENV SELKIES_STREAM_RECOVER_COOLDOWN_MS="120000"
+ENV SELKIES_LOCAL_LINK_OPEN="true"
+ENV SELKIES_LOCAL_LINK_POLL_INTERVAL_MS="800"
+ENV LOCAL_LINK_BRIDGE_PORT="38080"
+ENV LOCAL_LINK_BRIDGE_MAX_EVENTS="256"
+ENV LOCAL_LINK_BRIDGE_ALLOWED_SCHEMES="http,https,mailto"
+ENV LOCAL_LINK_BRIDGE_LOG_PATH="/config/logs/local-link-bridge.log"
 ENV ENABLE_RIGHT_CLICK_SPLIT="true"
 ENV ENABLE_SPLIT_FAB="true"
 ENV SPLIT_FAB_LOG_PATH="/config/logs/split-fab.log"
@@ -150,6 +156,8 @@ RUN sed -i 's/\r$//' \
     /defaults/menu.xml \
     /scripts/start.sh \
     /scripts/process-watchdog.sh \
+    /scripts/local_link_bridge.py \
+    /scripts/xdg-open-wrapper.sh \
     /scripts/x11-healthcheck.sh \
     /scripts/recover-xstack.sh \
     /scripts/healthcheck.sh \
@@ -166,6 +174,8 @@ RUN chmod +x /etc/cont-init.d/90-selkies-paste-config \
     /etc/s6-overlay/s6-rc.d/init-nginx/run \
     /scripts/start.sh \
     /scripts/process-watchdog.sh \
+    /scripts/local_link_bridge.py \
+    /scripts/xdg-open-wrapper.sh \
     /scripts/x11-healthcheck.sh \
     /scripts/recover-xstack.sh \
     /scripts/healthcheck.sh \
@@ -174,4 +184,8 @@ RUN chmod +x /etc/cont-init.d/90-selkies-paste-config \
     /scripts/split_fab.py \
     /scripts/wechat/*.sh \
     /scripts/qq/*.sh
+
+RUN if [ -x /usr/bin/xdg-open ] && [ ! -x /usr/bin/xdg-open.real ]; then mv /usr/bin/xdg-open /usr/bin/xdg-open.real; fi && \
+    cp /scripts/xdg-open-wrapper.sh /usr/bin/xdg-open && \
+    chmod +x /usr/bin/xdg-open
 

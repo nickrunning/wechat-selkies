@@ -44,6 +44,7 @@
 - **自动分屏工具**：新增窗口右键分屏和悬浮分屏工具，支持左右对半分、上下对半分、都全屏三种模式。
 - **低延迟优化**：默认参数与编码策略针对交互延迟优化，并增加卡流自动恢复与 X11 自愈机制。
 - **QQ 新特性支持**：镜像构建阶段自动解析并安装最新 Linux QQ，叠加卡死检测与自动拉起能力。
+- **链接本地打开**：容器内应用触发链接打开时，由浏览器客户端在本机拉起新标签页打开链接。
 
 ## 截图展示
 ![微信截图](./docs/images/wechat-selkies-1.jpg)
@@ -149,6 +150,9 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
           - SELKIES_DEFAULT_H264_CRF=30
           - SELKIES_STREAM_WAIT_THRESHOLD_MS=35000
           - SELKIES_STREAM_RECOVER_COOLDOWN_MS=120000
+          - SELKIES_LOCAL_LINK_OPEN=true
+          - SELKIES_LOCAL_LINK_POLL_INTERVAL_MS=800
+          - LOCAL_LINK_BRIDGE_PORT=38080
           # - CUSTOM_USER=<Your Name>      # legacy field; kept for compatibility
           # - PASSWORD=<Your PIN>          # PIN 登录（仅密码输入，无需账号）
         mem_reservation: "1g"            # reduce OOM risk during long-running idle sessions
@@ -235,6 +239,11 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
 | `SELKIES_DEFAULT_H264_CRF` | `30` | 默认 H264 CRF（优先降低编码负载与输入延迟） |
 | `SELKIES_STREAM_WAIT_THRESHOLD_MS` | `35000` | 页面处于 `Waiting for stream...` 且无视频流时，自动恢复阈值（毫秒） |
 | `SELKIES_STREAM_RECOVER_COOLDOWN_MS` | `120000` | 自动恢复冷却时间（毫秒，防止循环刷新） |
+| `SELKIES_LOCAL_LINK_OPEN` | `true` | 启用容器应用链接在本地浏览器打开（QQ/微信点击链接） |
+| `SELKIES_LOCAL_LINK_POLL_INTERVAL_MS` | `800` | 前端轮询链接事件间隔（毫秒） |
+| `LOCAL_LINK_BRIDGE_PORT` | `38080` | 容器内本地链接桥接服务端口（需与 nginx 配置保持一致） |
+| `LOCAL_LINK_BRIDGE_MAX_EVENTS` | `256` | 本地链接事件队列容量（环形缓存） |
+| `LOCAL_LINK_BRIDGE_ALLOWED_SCHEMES` | `http,https,mailto` | 允许从容器传递到本地浏览器打开的协议白名单 |
 
 #### 图片粘贴（Ctrl+V）
 

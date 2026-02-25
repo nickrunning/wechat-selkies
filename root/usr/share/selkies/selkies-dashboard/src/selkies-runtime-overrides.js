@@ -15,6 +15,11 @@
   var STREAM_RECOVER_COOLDOWN_MS = sanitizeInt(runtime.streamRecoverCooldownMs, 120000, 30000, 600000);
   var WS_SESSION_ID = "sid_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
   var WS_SESSION_EPOCH = Date.now();
+  var LOCAL_LINK_OPEN_ENABLED = sanitizeBool(runtime.localLinkOpenEnabled, true);
+  var LOCAL_LINK_POLL_INTERVAL_MS = sanitizeInt(runtime.localLinkPollIntervalMs, 800, 300, 10000);
+  var localLinkCursorKey = "local_link_cursor_v1";
+  var localLinkCursor = parseTimestamp(getStoredValue(localLinkCursorKey));
+  var localLinkPollTimer = null;
 
   function authBasePath() {
     var path = String(window.location.pathname || "/");
@@ -410,6 +415,143 @@
     });
   }
 
+  function localLinkApiPath(pathSuffix) {
+    var base = appBasePath();
+    if (!base.endsWith("/")) {
+      base += "/";
+    }
+    return base + "api/local-link/" + String(pathSuffix || "").replace(/^\/+/, "");
+  }
+
+  function ensureLocalLinkToastStyle() {
+    if (document.getElementById("selkies-local-link-toast-style")) return;
+    var style = document.createElement("style");
+    style.id = "selkies-local-link-toast-style";
+    style.textContent =
+      "#selkies-local-link-toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);" +
+      "background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:8px;padding:8px 12px;" +
+      "font-size:12px;z-index:10020;display:none;box-shadow:0 10px 30px rgba(0,0,0,.35);max-width:min(90vw,780px);" +
+      "white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+      "#selkies-local-link-toast a{color:#93c5fd;text-decoration:underline;}";
+    document.head.appendChild(style);
+  }
+
+  function showLocalLinkToast(url, opened) {
+    ensureLocalLinkToastStyle();
+    var toast = document.getElementById("selkies-local-link-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "selkies-local-link-toast";
+      document.body.appendChild(toast);
+    }
+
+    if (opened) {
+      toast.textContent = "Opened local browser: " + url;
+    } else {
+      toast.innerHTML = "";
+      var prefix = document.createElement("span");
+      prefix.textContent = "Popup was blocked. Click to open: ";
+      var link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = url;
+      toast.appendChild(prefix);
+      toast.appendChild(link);
+    }
+
+    toast.style.display = "block";
+    window.setTimeout(function () {
+      toast.style.display = "none";
+    }, 4500);
+  }
+
+  function sanitizeLocalLinkUrl(url) {
+    try {
+      var parsed = new URL(String(url || ""), window.location.href);
+      var protocol = parsed.protocol.toLowerCase();
+      if (protocol !== "http:" && protocol !== "https:" && protocol !== "mailto:") {
+        return "";
+      }
+      return parsed.toString();
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function openLocalLink(url) {
+    var safeUrl = sanitizeLocalLinkUrl(url);
+    if (!safeUrl) return false;
+    var openedWindow = null;
+    try {
+      openedWindow = window.open(safeUrl, "_blank", "noopener,noreferrer");
+    } catch (_err) {}
+    if (openedWindow) {
+      try {
+        openedWindow.opener = null;
+      } catch (_err) {}
+      return true;
+    }
+    return false;
+  }
+
+  function applyLocalLinkEvents(events) {
+    if (!Array.isArray(events) || events.length === 0) return;
+    events.sort(function (a, b) {
+      return parseTimestamp(a && a.id) - parseTimestamp(b && b.id);
+    });
+    for (var i = 0; i < events.length; i += 1) {
+      var event = events[i] || {};
+      var eventId = parseTimestamp(event.id);
+      if (eventId > localLinkCursor) {
+        localLinkCursor = eventId;
+      }
+      var safeUrl = sanitizeLocalLinkUrl(event.url);
+      if (!safeUrl) continue;
+      var opened = openLocalLink(safeUrl);
+      showLocalLinkToast(safeUrl, opened);
+    }
+    setStoredValue(localLinkCursorKey, localLinkCursor);
+  }
+
+  function pollLocalLinkEvents() {
+    if (!LOCAL_LINK_OPEN_ENABLED) return;
+    var path = localLinkApiPath("pull?since=" + encodeURIComponent(String(localLinkCursor || 0)));
+    window
+      .fetch(path, {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: { "X-Requested-With": "XMLHttpRequest" }
+      })
+      .then(function (response) {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then(function (payload) {
+        if (!payload || !payload.ok) return;
+        applyLocalLinkEvents(payload.events);
+        var latest = parseTimestamp(payload.latest_id);
+        if (latest > localLinkCursor) {
+          localLinkCursor = latest;
+          setStoredValue(localLinkCursorKey, localLinkCursor);
+        }
+      })
+      .catch(function () {});
+  }
+
+  function startLocalLinkEventPoller() {
+    if (!LOCAL_LINK_OPEN_ENABLED || localLinkPollTimer) return;
+    pollLocalLinkEvents();
+    localLinkPollTimer = window.setInterval(pollLocalLinkEvents, LOCAL_LINK_POLL_INTERVAL_MS);
+    window.addEventListener("focus", pollLocalLinkEvents);
+    document.addEventListener("visibilitychange", function () {
+      if (!document.hidden) {
+        pollLocalLinkEvents();
+      }
+    });
+  }
+
   function bindServerSettingsModeHint() {
     window.addEventListener("message", function (event) {
       var data = event && event.data;
@@ -461,6 +603,7 @@
     }, 5000);
     bindServerSettingsModeHint();
     bindStreamRecoveryWatchdog();
+    startLocalLinkEventPoller();
   }
 
   if (document.readyState === "loading") {

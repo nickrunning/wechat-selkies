@@ -25,6 +25,14 @@ start_tray() {
     fi
 }
 
+start_local_link_bridge() {
+    if ! pgrep -f "/scripts/local_link_bridge.py" >/dev/null 2>&1; then
+        LOCAL_LINK_BRIDGE_LOG_PATH="${LOCAL_LINK_BRIDGE_LOG_PATH:-/config/logs/local-link-bridge.log}"
+        mkdir -p "$(dirname "$LOCAL_LINK_BRIDGE_LOG_PATH")"
+        nohup python3 /scripts/local_link_bridge.py >>"$LOCAL_LINK_BRIDGE_LOG_PATH" 2>&1 &
+    fi
+}
+
 start_split_fab() {
     if ! pgrep -f "/scripts/split_fab.py" >/dev/null 2>&1; then
         SPLIT_FAB_LOG_PATH="${SPLIT_FAB_LOG_PATH:-/config/logs/split-fab.log}"
@@ -82,6 +90,10 @@ fi
 patch_openbox_right_click_menu
 
 start_tray
+
+if is_true "${SELKIES_LOCAL_LINK_OPEN:-true}"; then
+    start_local_link_bridge
+fi
 
 # start WeChat application in the background if exists and auto-start enabled
 if is_true "${AUTO_START_WECHAT:-true}"; then

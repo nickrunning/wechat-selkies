@@ -17,6 +17,8 @@ DEFAULT_USE_PAINT_OVER_QUALITY_RAW="${SELKIES_DEFAULT_USE_PAINT_OVER_QUALITY:-fa
 DEFAULT_H264_CRF_RAW="${SELKIES_DEFAULT_H264_CRF:-30}"
 DEFAULT_STREAM_WAIT_THRESHOLD_RAW="${SELKIES_STREAM_WAIT_THRESHOLD_MS:-35000}"
 DEFAULT_STREAM_RECOVER_COOLDOWN_RAW="${SELKIES_STREAM_RECOVER_COOLDOWN_MS:-120000}"
+LOCAL_LINK_OPEN_RAW="${SELKIES_LOCAL_LINK_OPEN:-true}"
+LOCAL_LINK_POLL_INTERVAL_RAW="${SELKIES_LOCAL_LINK_POLL_INTERVAL_MS:-800}"
 DRI_NODE_PATH="${DRI_NODE:-/dev/dri/renderD128}"
 
 enabled_js="false"
@@ -86,6 +88,17 @@ if ! [[ "$default_stream_recover_cooldown_ms" =~ ^[0-9]+$ ]] || [ "$default_stre
   default_stream_recover_cooldown_ms="120000"
 fi
 
+local_link_open_js="true"
+case "${LOCAL_LINK_OPEN_RAW,,}" in
+  false|0|no|off) local_link_open_js="false" ;;
+  *) local_link_open_js="true" ;;
+esac
+
+local_link_poll_interval_ms="${LOCAL_LINK_POLL_INTERVAL_RAW}"
+if ! [[ "$local_link_poll_interval_ms" =~ ^[0-9]+$ ]] || [ "$local_link_poll_interval_ms" -lt 300 ] || [ "$local_link_poll_interval_ms" -gt 10000 ]; then
+  local_link_poll_interval_ms="800"
+fi
+
 dri_available_js="false"
 if [ -e "$DRI_NODE_PATH" ] || [ -e "/dev/dri/renderD128" ] || [ -d "/dev/dri" ]; then
   dri_available_js="true"
@@ -131,6 +144,8 @@ window.__SELKIES_RUNTIME__ = {
   defaultH264Crf: ${default_h264_crf},
   streamWaitThresholdMs: ${default_stream_wait_threshold_ms},
   streamRecoverCooldownMs: ${default_stream_recover_cooldown_ms},
+  localLinkOpenEnabled: ${local_link_open_js},
+  localLinkPollIntervalMs: ${local_link_poll_interval_ms},
   defaultGamepadEnabled: ${default_gamepad_js},
   defaultBinaryClipboard: ${default_binary_clipboard_js}
 };
