@@ -46,8 +46,8 @@ services:
       - X11_WATCHDOG_FAIL_THRESHOLD=2
       - X11_HEALTHCHECK_TIMEOUT=2
       - WECHAT_IDLE_KEEPALIVE=true
-      - WECHAT_KEEPALIVE_INTERVAL=300
-      - WECHAT_KEEPALIVE_IDLE_SECONDS=300
+      - WECHAT_KEEPALIVE_INTERVAL=1800
+      - WECHAT_KEEPALIVE_IDLE_SECONDS=1800
       - QQ_EXTRA_FLAGS=--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer
       - QQ_NICE_LEVEL=-2
       - QQ_WATCHDOG_HANG_DETECT=true

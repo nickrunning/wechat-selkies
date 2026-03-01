@@ -129,8 +129,8 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
           - WATCHDOG_RESTART_WECHAT=true # auto-restart WeChat when process exits
           - WATCHDOG_RESTART_QQ=true     # auto-restart QQ when process exits
           - WECHAT_IDLE_KEEPALIVE=true   # idle-time WeChat keepalive poke
-          - WECHAT_KEEPALIVE_INTERVAL=300      # keepalive interval in seconds
-          - WECHAT_KEEPALIVE_IDLE_SECONDS=300  # only run keepalive when idle >= this value
+          - WECHAT_KEEPALIVE_INTERVAL=1800      # keepalive interval in seconds
+          - WECHAT_KEEPALIVE_IDLE_SECONDS=1800  # only run keepalive when idle >= this value
           - QQ_EXTRA_FLAGS=--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer
           - QQ_NICE_LEVEL=-2             # process nice level, lower value = higher priority (requires permission)
           - QQ_WATCHDOG_HANG_DETECT=true
@@ -216,8 +216,8 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
 | `WATCHDOG_RESTART_WECHAT` | `true` | 微信进程退出后自动重启 |
 | `WATCHDOG_RESTART_QQ` | `true` | QQ 进程退出后自动重启（仅在 AUTO_START_QQ=true 时） |
 | `WECHAT_IDLE_KEEPALIVE` | `true` | 空闲时定时激活微信窗口并触发轻量按键，降低隔夜掉线概率 |
-| `WECHAT_KEEPALIVE_INTERVAL` | `300` | 微信保活巡检间隔（秒） |
-| `WECHAT_KEEPALIVE_IDLE_SECONDS` | `300` | 仅当会话空闲超过该阈值时执行保活（秒） |
+| `WECHAT_KEEPALIVE_INTERVAL` | `1800` | 微信保活巡检间隔（秒） |
+| `WECHAT_KEEPALIVE_IDLE_SECONDS` | `1800` | 仅当会话空闲超过该阈值时执行保活（秒） |
 | `QQ_EXTRA_FLAGS` | `--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer` | QQ 启动附加参数（降低 GPU 导致的卡死概率） |
 | `QQ_NICE_LEVEL` | `-2` | QQ 进程 nice 优先级（-20 到 19） |
 | `QQ_WATCHDOG_HANG_DETECT` | `true` | 启用 QQ 卡死检测（进程存在但窗口不响应） |

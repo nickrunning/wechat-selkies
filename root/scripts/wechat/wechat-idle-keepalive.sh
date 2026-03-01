@@ -13,7 +13,7 @@ validate_interval() {
     if [[ "${1:-}" =~ ^[0-9]+$ ]] && [ "$1" -ge 30 ]; then
         echo "$1"
     else
-        echo "300"
+        echo "1800"
     fi
 }
 
@@ -21,7 +21,7 @@ validate_idle_seconds() {
     if [[ "${1:-}" =~ ^[0-9]+$ ]] && [ "$1" -ge 60 ]; then
         echo "$1"
     else
-        echo "300"
+        echo "1800"
     fi
 }
 
@@ -38,8 +38,8 @@ get_wechat_window() {
     echo "$wid"
 }
 
-interval="$(validate_interval "${WECHAT_KEEPALIVE_INTERVAL:-300}")"
-idle_seconds="$(validate_idle_seconds "${WECHAT_KEEPALIVE_IDLE_SECONDS:-300}")"
+interval="$(validate_interval "${WECHAT_KEEPALIVE_INTERVAL:-1800}")"
+idle_seconds="$(validate_idle_seconds "${WECHAT_KEEPALIVE_IDLE_SECONDS:-1800}")"
 idle_threshold_ms=$((idle_seconds * 1000))
 
 if ! command -v xdotool >/dev/null 2>&1; then

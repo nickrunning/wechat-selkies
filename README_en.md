@@ -126,8 +126,8 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
           - WATCHDOG_RESTART_WECHAT=true # auto-restart WeChat when process exits
           - WATCHDOG_RESTART_QQ=true     # auto-restart QQ when process exits
           - WECHAT_IDLE_KEEPALIVE=true   # idle-time WeChat keepalive poke
-          - WECHAT_KEEPALIVE_INTERVAL=300      # keepalive interval in seconds
-          - WECHAT_KEEPALIVE_IDLE_SECONDS=300  # only run keepalive when idle >= this value
+          - WECHAT_KEEPALIVE_INTERVAL=1800      # keepalive interval in seconds
+          - WECHAT_KEEPALIVE_IDLE_SECONDS=1800  # only run keepalive when idle >= this value
           - QQ_EXTRA_FLAGS=--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer
           - QQ_NICE_LEVEL=-2             # process nice level, lower value = higher priority (requires permission)
           - QQ_WATCHDOG_HANG_DETECT=true
@@ -213,8 +213,8 @@ Configure the following environment variables in `docker-compose.yml`:
 | `WATCHDOG_RESTART_WECHAT` | `true` | Auto-restart WeChat if process exits |
 | `WATCHDOG_RESTART_QQ` | `true` | Auto-restart QQ if process exits (only when AUTO_START_QQ=true) |
 | `WECHAT_IDLE_KEEPALIVE` | `true` | Periodically activate WeChat when session is idle to reduce overnight logout probability |
-| `WECHAT_KEEPALIVE_INTERVAL` | `300` | WeChat keepalive check interval in seconds |
-| `WECHAT_KEEPALIVE_IDLE_SECONDS` | `300` | Run keepalive only when user idle time exceeds this threshold |
+| `WECHAT_KEEPALIVE_INTERVAL` | `1800` | WeChat keepalive check interval in seconds |
+| `WECHAT_KEEPALIVE_IDLE_SECONDS` | `1800` | Run keepalive only when user idle time exceeds this threshold |
 | `QQ_EXTRA_FLAGS` | `--disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-gpu --disable-gpu-compositing --disable-gpu-rasterization --disable-features=CalculateNativeWinOcclusion,UseSkiaRenderer` | Extra QQ launch flags to reduce GPU-related hangs |
 | `QQ_NICE_LEVEL` | `-2` | Nice level for QQ process (-20 to 19) |
 | `QQ_WATCHDOG_HANG_DETECT` | `true` | Enable QQ hang detection (process alive but window unresponsive) |
