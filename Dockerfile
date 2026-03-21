@@ -17,7 +17,7 @@ RUN echo "🏗️ Building WeChat-Selkies on $BUILDPLATFORM, targeting $TARGETPL
 
 # set environment variables
 RUN apt-get update && \
-    apt-get install -y fonts-noto-cjk libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+    apt-get install -y vim fonts-noto-cjk libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
     libxcb-render-util0 libxcb-xkb1 libxkbcommon-x11-0 \
     shared-mime-info desktop-file-utils libxcb1 libxcb-icccm4 libxcb-image0 \
     libxcb-keysyms1 libxcb-randr0 libxcb-render0 libxcb-render-util0 libxcb-shape0 \
