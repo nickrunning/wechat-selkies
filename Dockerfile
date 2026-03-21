@@ -28,7 +28,7 @@ RUN apt-get update && \
     libxcomposite1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 \
     libxss1 libxtst6 libatomic1 libxcomposite1 libxrender1 libxrandr2 libxkbcommon-x11-0 \
     libfontconfig1 libdbus-1-3 libnss3 libx11-xcb1 python3-tk python3-venv \
-    stalonetray inotify-tools git
+    stalonetray inotify-tools git sqlite3
 
 RUN pip install --no-cache-dir python-xlib
 

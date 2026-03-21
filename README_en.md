@@ -35,6 +35,7 @@ This project packages the official WeChat/QQ Linux client in a Docker container,
 - 🪟 **Window Switcher**: Added a floating window switcher in the top left corner for easy switching to background windows, laying the foundation for adding other features in the future
 - 🤖 **Auto Start**: Configurable auto-start for WeChat and QQ clients (optional)
 - 📋 **Desktop Shortcut Integration**: Automatically scans `.desktop` files in `~/Desktop/` and adds them to the right-click menu, making it easy to launch third-party applications (e.g., apps installed via proot-apps)
+- 🗄️ **SQLite CLI Tool**: The image includes `sqlite3` for direct database query and debugging inside the container
 
 ## Screenshots
 ![WeChat Screenshot](./docs/images/wechat-selkies-1.jpg)
