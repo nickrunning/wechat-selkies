@@ -177,6 +177,11 @@ Configure the following environment variables in `docker-compose.yml`. Variables
 | `PASSWORD` | - | Web UI access password (recommended) |
 | `AUTO_START_WECHAT` | `true` | Whether to automatically start the WeChat client |
 | `AUTO_START_QQ` | `false` | Whether to automatically start the QQ client |
+| `ENABLE_WECHAT_NIGHTLY_RESTART` | `false` | Whether to enable nightly auto-stop and auto-restart for WeChat |
+| `WECHAT_NIGHTLY_STOP_TIME` | `23:30` | Daily scheduled stop time for WeChat (HH:MM format) |
+| `WECHAT_NIGHTLY_START_TIME` | `01:30` | Daily scheduled restart time for WeChat (HH:MM format) |
+
+
 
 #### Port Configuration
 

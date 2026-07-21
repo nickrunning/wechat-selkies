@@ -50,6 +50,13 @@ if [ "$AUTO_START_QQ" = "true" ]; then
     if [ -f /usr/bin/qq ]; then nohup /usr/bin/qq --no-sandbox > /dev/null 2>&1 & fi
 fi
 
+# start WeChat nightly schedule background daemon if enabled
+if [ "$ENABLE_WECHAT_NIGHTLY_RESTART" = "true" ]; then
+    chmod +x /scripts/wechat/*.sh 2>/dev/null || true
+    nohup /scripts/wechat/wechat-nightly-schedule.sh > /dev/null 2>&1 &
+fi
+
+
 # !deprecated: start window switcher application in the background
 # start window switcher application in the background
 # nohup sleep 2 && python /scripts/window_switcher.py > /dev/null 2>&1 &

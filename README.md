@@ -179,6 +179,11 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
 | `PASSWORD` | - | Web UI 访问密码（推荐设置） |
 | `AUTO_START_WECHAT` | `true` | 是否自动启动微信客户端 |
 | `AUTO_START_QQ` | `false` | 是否自动启动 QQ 客户端 |
+| `ENABLE_WECHAT_NIGHTLY_RESTART` | `false` | 是否启用凌晨定时停止与自动重启微信 |
+| `WECHAT_NIGHTLY_STOP_TIME` | `23:30` | 每日自动关闭微信的时刻（HH:MM 格式） |
+| `WECHAT_NIGHTLY_START_TIME` | `01:30` | 每日自动重新启动微信的时刻（HH:MM 格式） |
+
+
 
 #### 端口配置
 

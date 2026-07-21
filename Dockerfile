@@ -100,6 +100,11 @@ ENV TZ="Asia/Shanghai"
 ENV LC_ALL="zh_CN.UTF-8"
 ENV AUTO_START_WECHAT="true"
 ENV AUTO_START_QQ="false"
+ENV ENABLE_WECHAT_NIGHTLY_RESTART="false"
+ENV WECHAT_NIGHTLY_STOP_TIME="23:30"
+ENV WECHAT_NIGHTLY_START_TIME="01:30"
+
+
 
 # update favicon
 RUN cp /usr/share/icons/hicolor/128x128/apps/wechat.png /usr/share/selkies/www/icon.png
