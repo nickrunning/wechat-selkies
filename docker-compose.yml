@@ -18,4 +18,7 @@ services:
       - PGID=${PGID:-100}               # set group id according to your system
       - CUSTOM_USER=${CUSTOM_USER:-}    # recommended to set a custom user name
       - PASSWORD=${PASSWORD:-}          # recommended to set a password for selkies web ui
+      - ENABLE_WECHAT_NIGHTLY_RESTART=${ENABLE_WECHAT_NIGHTLY_RESTART:-false}
+      - WECHAT_NIGHTLY_STOP_TIME=${WECHAT_NIGHTLY_STOP_TIME:-23:30}
+      - WECHAT_NIGHTLY_START_TIME=${WECHAT_NIGHTLY_START_TIME:-01:30}
     shm_size: "${SHM_SIZE:-1gb}"        # recommended, will improve performance
