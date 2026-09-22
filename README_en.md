@@ -342,4 +342,4 @@ This project is licensed under **MIT License**. See the [LICENSE](LICENSE) file 
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=nickrunning/wechat-selkies&type=Date)](https://www.star-history.com/#nickrunning/wechat-selkies&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=nickrunning/wechat-selkies&type=Date)](https://star-history.dera.page/#nickrunning/wechat-selkies&Date)
