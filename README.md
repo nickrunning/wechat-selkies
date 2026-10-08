@@ -251,19 +251,20 @@ docker compose pull && docker compose up -d
 git pull && docker compose up -d --build
 ```
 
-> **注意：** 微信和QQ的安装包 URL 指向官方最新版本，重新构建镜像时会自动下载最新版。
+> **注意：** 微信使用官方更新地址；QQ 自动检测优先尝试官方最新版，下载失败时依次回退到上次成功的地址和备用版本，并记录实际使用的地址。CI 构建使用 `versions/upstream.env` 中的地址和 SHA256 校验安装包。
 
 对于仓库维护者，当前自动化流程如下：
 
-1. `Detect Upstream Package Updates` 每 6 小时检查一次微信官方安装包版本，也支持手动触发
-2. 如果检测到版本号或安装包哈希变化，工作流会更新 `versions/upstream.env`
-3. 该文件变更提交到 `master` 后，会自动触发 `Build and Publish Docker Image`
+1. `Detect Upstream Package Updates` 每 6 小时检查一次微信和 QQ 官方安装包，也支持手动触发
+2. 如果检测到实际下载地址、版本号或安装包哈希变化，工作流会更新 `versions/upstream.env`
+3. 自动检测将变更提交到 `master` 后，通过 `workflow_dispatch` 显式触发 `Build and Publish Docker Image`（`GITHUB_TOKEN` 的提交不会触发其他 push 工作流）
+4. 镜像构建传入安装包 SHA256，确保版本变化时刷新下载缓存，并在安装前校验文件；镜像发布串行执行，减少并发推送触发限流
 
 版本状态文件位于 `versions/upstream.env`，当前记录了：
 
-- 微信 amd64/arm64 下载地址
-- 微信 amd64/arm64 解析出的版本号
-- 微信 amd64/arm64 安装包 SHA256
+- 微信和 QQ amd64/arm64 实际下载成功的地址
+- 微信和 QQ amd64/arm64 解析出的版本号
+- 微信和 QQ amd64/arm64 安装包 SHA256
 - 最近一次发生变更的检测时间
 
 ### 常见问题

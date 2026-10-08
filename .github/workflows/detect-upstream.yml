@@ -7,6 +7,11 @@ on:
 
 permissions:
   contents: write
+  actions: write
+
+concurrency:
+  group: detect-upstream-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   detect-wechat-updates:
@@ -14,9 +19,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Test upstream detection
+        run: python3 -m unittest discover -s .github/tests -v
 
       - name: Detect upstream package changes
         id: detect
@@ -30,3 +38,10 @@ jobs:
           git add versions/upstream.env
           git commit -m "chore: update upstream package state"
           git push
+
+      # Pushes made with GITHUB_TOKEN do not trigger other push workflows.
+      - name: Trigger Docker image build
+        if: steps.detect.outputs.changed == 'true' && github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docker.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME"

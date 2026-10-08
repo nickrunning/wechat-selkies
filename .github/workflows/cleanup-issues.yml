@@ -6,12 +6,15 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch: # 允许手动触发
 
+permissions:
+  issues: write
+
 jobs:
   close-invalid-issues:
     runs-on: ubuntu-latest
     steps:
       - name: Close stale issues with needs-more-info label
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const { data: issues } = await github.rest.issues.listForRepo({
@@ -58,7 +61,7 @@ jobs:
             }
 
       - name: Add warning to old issues without labels
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const { data: issues } = await github.rest.issues.listForRepo({

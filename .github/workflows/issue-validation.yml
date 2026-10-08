@@ -4,12 +4,15 @@ on:
   issues:
     types: [opened, edited]
 
+permissions:
+  issues: write
+
 jobs:
   validate-issue:
     runs-on: ubuntu-latest
     steps:
       - name: Check Issue Title Length
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const issue = context.payload.issue;
@@ -47,7 +50,7 @@ jobs:
             }
 
       - name: Check Issue Body Length
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const issue = context.payload.issue;
@@ -73,7 +76,7 @@ jobs:
             }
 
       - name: Check for Template Usage
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const issue = context.payload.issue;
@@ -110,7 +113,7 @@ jobs:
             }
 
       - name: Auto-assign Labels Based on Content
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const issue = context.payload.issue;
@@ -166,7 +169,7 @@ jobs:
             }
 
       - name: Welcome First Time Contributors
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const issue = context.payload.issue;

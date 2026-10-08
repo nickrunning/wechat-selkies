@@ -250,19 +250,20 @@ docker compose pull && docker compose up -d
 git pull && docker compose up -d --build
 ```
 
-> **Note:** The WeChat and QQ download URLs point to the latest official versions. Rebuilding the image will automatically download the newest version.
+> **Note:** WeChat uses its official update URLs. QQ detection tries the latest official packages first, then the previously successful URLs and backup versions if downloads fail, and records the URLs actually used. CI builds use the URLs and SHA256 hashes in `versions/upstream.env` to verify packages.
 
 For maintainers, the current automation flow is:
 
-1. `Detect Upstream Package Updates` checks the official WeChat packages every 6 hours and can also be triggered manually
-2. If the version or package hash changes, the workflow updates `versions/upstream.env`
-3. Once that file is committed to `master`, it automatically triggers `Build and Publish Docker Image`
+1. `Detect Upstream Package Updates` checks the official WeChat and QQ packages every 6 hours and can also be triggered manually
+2. If a successful download URL, version, or package hash changes, the workflow updates `versions/upstream.env`
+3. After committing the changes to `master`, detection explicitly triggers `Build and Publish Docker Image` with `workflow_dispatch` (`GITHUB_TOKEN` pushes do not trigger other push workflows)
+4. Builds receive package SHA256 hashes to refresh download caches when packages change and verify files before installation. Image publishing runs serially to reduce rate limits caused by concurrent pushes
 
 The version state file is stored at `versions/upstream.env` and currently records:
 
-- WeChat amd64/arm64 download URLs
-- Parsed WeChat amd64/arm64 package versions
-- WeChat amd64/arm64 package SHA256 hashes
+- Successful WeChat and QQ amd64/arm64 download URLs
+- Parsed WeChat and QQ amd64/arm64 package versions
+- WeChat and QQ amd64/arm64 package SHA256 hashes
 - The last detection time that actually changed the tracked state
 
 ### Common Issues

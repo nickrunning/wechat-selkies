@@ -7,8 +7,15 @@ on:
       - master
     paths:
       - 'versions/upstream.env'
+      - 'Dockerfile'
+      - 'root/**'
+      - '.github/workflows/docker.yml'
     tags:
       - 'v*'
+
+concurrency:
+  group: docker-publish
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -27,7 +34,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -65,7 +72,7 @@ jobs:
     - name: Load upstream version state
       run: |
         if [ -f versions/upstream.env ]; then
-          grep -v '^#' versions/upstream.env | grep -v '^\s*$' | sed 's/"//g' >> $GITHUB_ENV
+          grep -v '^#' versions/upstream.env | grep -v '^\s*$' | sed 's/"//g' >> "$GITHUB_ENV"
         fi
 
     - name: Build and push Docker image
@@ -78,8 +85,14 @@ jobs:
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
+          WECHAT_AMD64_URL=${{ env.WECHAT_AMD64_URL }}
+          WECHAT_ARM64_URL=${{ env.WECHAT_ARM64_URL }}
+          WECHAT_AMD64_SHA256=${{ env.WECHAT_AMD64_SHA256 }}
+          WECHAT_ARM64_SHA256=${{ env.WECHAT_ARM64_SHA256 }}
           QQ_AMD64_URL=${{ env.QQ_AMD64_URL }}
           QQ_ARM64_URL=${{ env.QQ_ARM64_URL }}
+          QQ_AMD64_SHA256=${{ env.QQ_AMD64_SHA256 }}
+          QQ_ARM64_SHA256=${{ env.QQ_ARM64_SHA256 }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -110,6 +123,10 @@ jobs:
         build-args: |
           INSTALL_QQ=false
           INSTALL_PCMANFM=false
+          WECHAT_AMD64_URL=${{ env.WECHAT_AMD64_URL }}
+          WECHAT_ARM64_URL=${{ env.WECHAT_ARM64_URL }}
+          WECHAT_AMD64_SHA256=${{ env.WECHAT_AMD64_SHA256 }}
+          WECHAT_ARM64_SHA256=${{ env.WECHAT_ARM64_SHA256 }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
@@ -123,36 +140,38 @@ jobs:
 
     - name: Output Docker image information
       run: |
-        echo "## 🐳 Docker Images Published" >> $GITHUB_STEP_SUMMARY
-        echo "### GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
-        echo "**Registry:** ${{ env.REGISTRY }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Repository:** ${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
-        echo "**Full image digest:** \`${{ steps.build-image.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "**Minimal image digest:** \`${{ steps.build-minimal.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-        echo "**Tags (full):**" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "**Tags (minimal):**" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "${{ steps.meta-minimal.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        
-        if [ "${{ vars.ENABLE_DOCKERHUB }}" == "true" ]; then
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Docker Hub" >> $GITHUB_STEP_SUMMARY
-          echo "**Registry:** ${{ env.DOCKERHUB_REGISTRY }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Digest:** \`${{ steps.build-image.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Docker Hub" >> $GITHUB_STEP_SUMMARY
-          echo "⚠️ **Skipped** - Docker Hub push disabled (set ENABLE_DOCKERHUB=true to enable)" >> $GITHUB_STEP_SUMMARY
-        fi
+        {
+          echo "## 🐳 Docker Images Published"
+          echo "### GitHub Container Registry"
+          echo "**Registry:** ${{ env.REGISTRY }}"
+          echo "**Repository:** ${{ env.IMAGE_NAME }}"
+          echo "**Full image digest:** \`${{ steps.build-image.outputs.digest }}\`"
+          echo "**Minimal image digest:** \`${{ steps.build-minimal.outputs.digest }}\`"
+          echo "**Tags (full):**"
+          echo "\`\`\`"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "\`\`\`"
+          echo "**Tags (minimal):**"
+          echo "\`\`\`"
+          echo "${{ steps.meta-minimal.outputs.tags }}"
+          echo "\`\`\`"
+
+          if [ "${{ vars.ENABLE_DOCKERHUB }}" == "true" ]; then
+            echo ""
+            echo "### Docker Hub"
+            echo "**Registry:** ${{ env.DOCKERHUB_REGISTRY }}"
+            echo "**Repository:** ${{ github.repository }}"
+            echo "**Digest:** \`${{ steps.build-image.outputs.digest }}\`"
+            echo "**Tags:**"
+            echo "\`\`\`"
+            echo "${{ steps.meta.outputs.tags }}"
+            echo "\`\`\`"
+          else
+            echo ""
+            echo "### Docker Hub"
+            echo "⚠️ **Skipped** - Docker Hub push disabled (set ENABLE_DOCKERHUB=true to enable)"
+          fi
+        } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/v')

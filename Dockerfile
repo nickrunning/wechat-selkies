@@ -38,12 +38,18 @@ RUN if [ "$INSTALL_PCMANFM" = "true" ]; then \
 RUN pip install --no-cache-dir python-xlib
 
 # Install WeChat based on target architecture
+ARG WECHAT_AMD64_URL="https://dldir1v6.qq.com/weixin/Universal/Linux/WeChatLinux_x86_64.deb"
+ARG WECHAT_ARM64_URL="https://dldir1v6.qq.com/weixin/Universal/Linux/WeChatLinux_arm64.deb"
+ARG WECHAT_AMD64_SHA256
+ARG WECHAT_ARM64_SHA256
 RUN case "$TARGETPLATFORM" in \
     "linux/amd64") \
-        WECHAT_URL="https://dldir1v6.qq.com/weixin/Universal/Linux/WeChatLinux_x86_64.deb"; \
+        WECHAT_URL="$WECHAT_AMD64_URL"; \
+        WECHAT_SHA256="$WECHAT_AMD64_SHA256"; \
         WECHAT_ARCH="x86_64" ;; \
     "linux/arm64") \
-        WECHAT_URL="https://dldir1v6.qq.com/weixin/Universal/Linux/WeChatLinux_arm64.deb"; \
+        WECHAT_URL="$WECHAT_ARM64_URL"; \
+        WECHAT_SHA256="$WECHAT_ARM64_SHA256"; \
         WECHAT_ARCH="arm64" ;; \
     *) \
         echo "❌ Unsupported platform: $TARGETPLATFORM" >&2; \
@@ -51,7 +57,8 @@ RUN case "$TARGETPLATFORM" in \
         exit 1 ;; \
     esac && \
     echo "📦 Downloading WeChat for $WECHAT_ARCH architecture..." && \
-    curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors -o wechat.deb "$WECHAT_URL" && \
+    curl -fsSL --connect-timeout 30 --max-time 600 --retry 3 --retry-delay 10 --retry-connrefused -o wechat.deb "$WECHAT_URL" && \
+    if [ -n "$WECHAT_SHA256" ]; then echo "$WECHAT_SHA256  wechat.deb" | sha256sum -c -; fi && \
     echo "🔧 Installing WeChat..." && \
     (dpkg -i wechat.deb || (apt-get update && apt-get install -f -y && dpkg -i wechat.deb)) && \
     rm -f wechat.deb && \
@@ -61,20 +68,25 @@ RUN case "$TARGETPLATFORM" in \
 ARG INSTALL_QQ
 ARG QQ_AMD64_URL="https://qqdl.gtimg.cn/qqfile/QQNT/9.9.33/release/c97651b2/QQ_3.2.32_260730_amd64_01.deb"
 ARG QQ_ARM64_URL="https://qqdl.gtimg.cn/qqfile/QQNT/9.9.33/release/c97651b2/QQ_3.2.32_260730_arm64_01.deb"
+ARG QQ_AMD64_SHA256
+ARG QQ_ARM64_SHA256
 RUN if [ "$INSTALL_QQ" = "true" ]; then \
         case "$TARGETPLATFORM" in \
         "linux/amd64") \
             QQ_URL="$QQ_AMD64_URL"; \
+            QQ_SHA256="$QQ_AMD64_SHA256"; \
             QQ_ARCH="x86_64" ;; \
         "linux/arm64") \
             QQ_URL="$QQ_ARM64_URL"; \
+            QQ_SHA256="$QQ_ARM64_SHA256"; \
             QQ_ARCH="arm64" ;; \
         *) \
             echo "❌ Unsupported platform: $TARGETPLATFORM" >&2; \
             exit 1 ;; \
         esac && \
         echo "📦 Downloading QQ for $QQ_ARCH architecture..." && \
-        curl -fsSL --retry 3 --retry-delay 10 --retry-all-errors -o qq.deb "$QQ_URL" && \
+        curl -fsSL --connect-timeout 30 --max-time 600 --retry 3 --retry-delay 10 --retry-connrefused -o qq.deb "$QQ_URL" && \
+        if [ -n "$QQ_SHA256" ]; then echo "$QQ_SHA256  qq.deb" | sha256sum -c -; fi && \
         echo "🔧 Installing QQ..." && \
         (dpkg -i qq.deb || (apt-get update && apt-get install -f -y && dpkg -i qq.deb)) && \
         rm -f qq.deb && \
