@@ -12,7 +12,7 @@ Docker 容器化微信/QQ Linux 客户端，基于 LinuxServer Selkies WebRTC �
 
 ```
 wechat-selkies/
-├── Dockerfile              # 单阶段构建，基于 selkies:ubuntunoble
+├── Dockerfile              # 单阶段构建，基于 selkies:ubunturesolute
 ├── docker-compose.yml      # 单服务编排
 ├── root/                   # COPY /root / → 容器内脚本和配置
 │   ├── defaults/
