@@ -282,7 +282,7 @@ docker compose logs -f wechat-selkies
 
 ## 技术架构
 
-- **基础镜像**：`ghcr.io/linuxserver/baseimage-selkies:ubuntunoble`
+- **基础镜像**：`ghcr.io/linuxserver/baseimage-selkies:ubunturesolute`
 - **微信客户端**：官方微信 Linux 版本
 - **Web 技术**：Selkies WebRTC
 - **容器化**：Docker + Docker Compose

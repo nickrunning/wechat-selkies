@@ -281,7 +281,7 @@ docker compose logs -f wechat-selkies
 
 ## Technical Architecture
 
-- **Base Image**: `ghcr.io/linuxserver/baseimage-selkies:ubuntunoble`
+- **Base Image**: `ghcr.io/linuxserver/baseimage-selkies:ubunturesolute`
 - **WeChat Client**: Official WeChat Linux version
 - **Web Technology**: Selkies WebRTC
 - **Containerization**: Docker + Docker Compose
