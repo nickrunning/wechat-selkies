@@ -228,6 +228,8 @@ The image includes a **caret sensor**: IBus runs with the English keyboard engin
 
 The sensor does not participate in input: there is no Chinese engine and no input-method switching in the container; Chinese composition stays with the host IME. If the sensor is disabled or unavailable, the frontend falls back to detecting the teal caret in the video frame.
 
+The sensor is not WeChat-specific: any GTK/Qt application that reports its caret to the container IBus (QQ, for example) can use it. The video-frame fallback only detects WeChat's teal caret, so exact tracking for other apps depends on their own IBus reporting.
+
 - `ENABLE_IBUS_CARET_SENSOR=false`: disable the sensor (fall back to visual detection)
 - `--build-arg ENABLE_IME_ANCHOR=false`: disable the whole caret anchor patch
 - `window.__selkiesImeAnchorOffset = { x: 0, y: 0 }`: temporary calibration from DevTools

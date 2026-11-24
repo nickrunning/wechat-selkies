@@ -230,6 +230,8 @@ Selkies 用全屏隐藏输入框接收键盘事件，浏览器会把宿主输入
 
 这个传感器不参与输入：容器内没有中文输入法引擎，也没有中英文输入法切换，中文组字仍由你本机的输入法完成。传感器不可用或关闭时，前端会退回到从视频画面检测青色光标。
 
+传感器本身不绑定微信：任何向容器内 IBus 上报光标的 GTK/Qt 应用（如 QQ）都可以使用；视频帧 fallback 目前只识别微信的青色光标，因此 QQ 的精确跟随依赖它自己的 IBus 上报。
+
 - `ENABLE_IBUS_CARET_SENSOR=false`：关闭传感器（退回画面检测）
 - `--build-arg ENABLE_IME_ANCHOR=false`：关闭整个光标锚定补丁
 - `window.__selkiesImeAnchorOffset = { x: 0, y: 0 }`：DevTools 里临时校准
