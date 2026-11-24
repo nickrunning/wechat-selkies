@@ -23,7 +23,8 @@ wechat-selkies/
 │       ├── refresh-menu.sh     # 合并 menu.xml + ~/Desktop/*.desktop → 生成最终菜单
 │       ├── window_switcher.py  # ⚠️ 已废弃，仅保留
 │       ├── wechat/             # wechat-start.sh / wechat-restart.sh / wechat-unminimize.sh
-│       └── qq/                 # qq-restart.sh
+│       ├── qq/                 # qq-restart.sh
+│       └── ime/                # ime-anchor.js / caret-bridge.py / caret-sensor-start.sh
 ├── .github/workflows/      # CI: 多架构构建 + Issue 自动化
 ├── docs/images/            # README 截图
 └── config/                 # ⚠️ gitignored 运行时数据挂载点
@@ -38,6 +39,7 @@ wechat-selkies/
 | 修改右键菜单 | `root/defaults/menu.xml` + `root/scripts/refresh-menu.sh` | menu.xml 是模板，refresh-menu.sh 动态合并 ~/Desktop/*.desktop |
 | 修改菜单动态生成逻辑 | `root/scripts/refresh-menu.sh` | 解析 .desktop 文件的 Name/Exec/Icon 字段，处理图标搜索 |
 | 添加新应用启动/重启脚本 | `root/scripts/<app>/` | 遵循 wechat/ 目录模式: start.sh + restart.sh |
+| 修改输入法行为 | `Dockerfile` (ibus/nginx/前端注入) + `root/scripts/ime/` | IBus 仅作英文键盘光标传感器，宿主输入法负责中文 |
 | 修改环境变量 | `Dockerfile` (ENV) + `docker-compose.yml` (environment) | 两处需同步 |
 | CI/CD | `.github/workflows/docker.yml` | tag v* 触发，多架构 buildx，可选推送 Docker Hub |
 | Issue 自动化 | `.github/workflows/issue-validation.yml` + `cleanup-issues.yml` | 标题/描述校验 + 7天自动关闭 |
@@ -54,6 +56,7 @@ wechat-selkies/
 - **refresh-menu.sh**: 仅在内容变更时才写入 + reconfigure，避免无意义刷新
 - **图标搜索优先级**: proot-apps icons (256→512→128→64→48→scalable) → system icons → fallback xterm icon
 - **多架构**: Dockerfile 使用 `$TARGETPLATFORM` 条件分支安装不同架构 deb 包
+- **输入法**: 浏览器把宿主输入法候选框锚定到 Selkies 的隐藏 input。IBus 以英文键盘、`--panel=disable` 运行，仅作光标传感器；`caret-bridge.py` 把应用上报的 `SetCursorLocation` 和 X11 活动窗口位置通过 `/ime-caret.ws` 推送（JSON 作为 fallback），nginx 同源代理。`ime-anchor.js` 在光标处放一个光标大小的宿主 input，窗口移动按 X11 位移平移；传感器不可用时退回视频帧青色光标检测。`ENABLE_IBUS_CARET_SENSOR` 控制传感器
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
