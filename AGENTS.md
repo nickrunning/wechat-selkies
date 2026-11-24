@@ -56,7 +56,7 @@ wechat-selkies/
 - **refresh-menu.sh**: 仅在内容变更时才写入 + reconfigure，避免无意义刷新
 - **图标搜索优先级**: proot-apps icons (256→512→128→64→48→scalable) → system icons → fallback xterm icon
 - **多架构**: Dockerfile 使用 `$TARGETPLATFORM` 条件分支安装不同架构 deb 包
-- **输入法**: 浏览器把宿主输入法候选框锚定到 Selkies 的隐藏 input。IBus 以英文键盘、`--panel=disable` 运行，仅作光标传感器；`caret-bridge.py` 把应用上报的 `SetCursorLocation` 和 X11 活动窗口位置写入 `/config/ime-caret.json`，nginx 暴露为 `/ime-caret.json`。`ime-anchor.js` 在光标处放一个光标大小的宿主 input，窗口移动按 X11 位移平移；传感器不可用时退回视频帧青色光标检测。`ENABLE_IBUS_CARET_SENSOR` 控制传感器
+- **输入法**: 浏览器把宿主输入法候选框锚定到 Selkies 的隐藏 input。IBus 以英文键盘、`--panel=disable` 运行，仅作光标传感器；`caret-bridge.py` 把应用上报的 `SetCursorLocation` 和 X11 活动窗口位置通过 `/ime-caret.ws` 推送（JSON 作为 fallback），nginx 同源代理。`ime-anchor.js` 在光标处放一个光标大小的宿主 input，窗口移动按 X11 位移平移；传感器不可用时退回视频帧青色光标检测。`ENABLE_IBUS_CARET_SENSOR` 控制传感器
 
 ## ANTI-PATTERNS (THIS PROJECT)
 

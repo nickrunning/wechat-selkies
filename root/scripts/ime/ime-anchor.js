@@ -3,10 +3,13 @@
     if (window.__selkiesImeAnchorInstalled) return;
     window.__selkiesImeAnchorInstalled = true;
 
-    const VERSION = '6';
+    const VERSION = '7';
     let host = null;
     let hostLine = 22;
     let sensorCaret = null;
+    let caretWS = null;
+    let wsBackoff = 1000;
+    let wsReconnect = null;
     let scanToken = 0;
 
     function debug() {
@@ -309,16 +312,7 @@
         return { x: x, y: y, h: h, raw: sensorCaret, delta: [dx, dy] };
     }
 
-    async function pollSensorCaret() {
-        const base = location.pathname.replace(/[^/]*$/, '');
-        let payload;
-        try {
-            const response = await fetch(location.origin + base + 'ime-caret.json', { cache: 'no-store' });
-            if (!response.ok) return;
-            payload = await response.json();
-        } catch (err) {
-            return;
-        }
+    function applySensorPayload(payload) {
         if (!payload || !Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return;
         sensorCaret = payload;
         const el = host;
@@ -329,6 +323,63 @@
         if (!rect) return;
         if (Math.abs(rect.x - hostLeft) < 0.5 && Math.abs(rect.y - hostTop) < 0.5 && Math.abs(rect.h - hostLine) < 0.5) return;
         positionHostRect(rect.x, rect.y, rect.h, false);
+    }
+
+    async function pollSensorCaret() {
+        // The WebSocket is the primary transport; the JSON poll is only a
+        // fallback while the socket is unavailable.
+        if (caretWS && caretWS.readyState === WebSocket.OPEN) return;
+        const base = location.pathname.replace(/[^/]*$/, '');
+        let payload;
+        try {
+            const response = await fetch(location.origin + base + 'ime-caret.json', { cache: 'no-store' });
+            if (!response.ok) return;
+            payload = await response.json();
+        } catch (err) {
+            return;
+        }
+        applySensorPayload(payload);
+    }
+
+    function caretWSURL() {
+        const base = location.pathname.replace(/[^/]*$/, '');
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return proto + '//' + location.host + base + 'ime-caret.ws';
+    }
+
+    function connectCaretWS() {
+        if (!window.WebSocket) return;
+        try {
+            caretWS = new WebSocket(caretWSURL());
+        } catch (err) {
+            wsReconnect = setTimeout(connectCaretWS, wsBackoff);
+            wsBackoff = Math.min(wsBackoff * 2, 10000);
+            return;
+        }
+        caretWS.onopen = function () {
+            wsBackoff = 1000;
+            log('caret-ws-open', { url: caretWSURL() });
+        };
+        caretWS.onmessage = function (event) {
+            let payload;
+            try {
+                payload = JSON.parse(event.data);
+            } catch (err) {
+                return;
+            }
+            log('caret-ws-message', payload);
+            applySensorPayload(payload);
+        };
+        caretWS.onerror = function () {
+            try { caretWS.close(); } catch (err) { /* already closed */ }
+        };
+        caretWS.onclose = function () {
+            caretWS = null;
+            log('caret-ws-close');
+            if (wsReconnect) clearTimeout(wsReconnect);
+            wsReconnect = setTimeout(connectCaretWS, wsBackoff);
+            wsBackoff = Math.min(wsBackoff * 2, 10000);
+        };
     }
 
     function onOverlayPointerDown(event) {
@@ -380,7 +431,8 @@
     document.addEventListener('pointerdown', onOverlayPointerDown, true);
     document.addEventListener('mousedown', onOverlayMouseDown, true);
     window.addEventListener('keydown', onKeyDown, true);
-    setInterval(pollSensorCaret, 100);
+    setInterval(pollSensorCaret, 1000);
     pollSensorCaret();
+    connectCaretWS();
     log('installed', { version: VERSION, debug: debug(), stream: streamInfo() });
 })();

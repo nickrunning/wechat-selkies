@@ -38,8 +38,23 @@ for _ in $(seq 1 40); do
     sleep 0.25
 done
 
-if command -v python3 >/dev/null 2>&1 && [ -f /scripts/ime/caret-bridge.py ]; then
-    if ! pgrep -f "python3 /scripts/ime/caret-bridge.py" >/dev/null 2>&1; then
-        nohup python3 /scripts/ime/caret-bridge.py >/dev/null 2>&1 &
+PYTHON_BIN="$(command -v python3 2>/dev/null || true)"
+# Prefer the Selkies virtualenv interpreter, which ships aiohttp for the WS.
+if [ -x /lsiopy/bin/python3 ] && /lsiopy/bin/python3 -c 'import aiohttp' >/dev/null 2>&1; then
+    PYTHON_BIN=/lsiopy/bin/python3
+fi
+
+bridge_running() {
+    for pid in $(pgrep -x python3 2>/dev/null); do
+        if tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q "scripts/ime/caret-bridge.py"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+if [ -n "$PYTHON_BIN" ] && [ -f /scripts/ime/caret-bridge.py ]; then
+    if ! bridge_running; then
+        nohup "$PYTHON_BIN" /scripts/ime/caret-bridge.py >/dev/null 2>&1 &
     fi
 fi

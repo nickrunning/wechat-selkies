@@ -147,6 +147,12 @@ RUN if [ -f /defaults/default.conf ]; then \
         mv /tmp/default.conf /defaults/default.conf; \
     fi
 
+# expose the caret WebSocket push, proxied to the bridge on loopback
+RUN if [ -f /defaults/default.conf ]; then \
+        awk '{ print } /^server \{/ { print "  location = SUBFOLDERime-caret.ws {"; print "    proxy_pass http://127.0.0.1:8766;"; print "    proxy_http_version 1.1;"; print "    proxy_set_header Upgrade $http_upgrade;"; print "    proxy_set_header Connection \"upgrade\";"; print "    proxy_read_timeout 3600s;"; print "    proxy_buffering off;"; print "  }" }' /defaults/default.conf > /tmp/default.conf.ws && \
+        mv /tmp/default.conf.ws /defaults/default.conf; \
+    fi
+
 # anchor the host IME candidate window to the WeChat text caret.
 # init-nginx recreates /usr/share/selkies/web from the dashboard sources at
 # every start, so patch the sources rather than the generated web directory.

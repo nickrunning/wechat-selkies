@@ -224,7 +224,7 @@ devices:
 
 Selkies receives keyboard events through a full-screen hidden input in the browser. The browser anchors the host input method's candidate window to that input's caret. Video frames have encoding and transport latency, so visual caret detection lags when the window is dragged or resized.
 
-The image includes a **caret sensor**: IBus runs with the English keyboard engine and no panel, and only listens to the real caret that WeChat reports to its input context. `caret-bridge.py` writes the caret rect and active X11 window position to `/ime-caret.json`. The frontend places a caret-sized IME host input at that position, so the candidate window appears at the real caret; window movement is applied as an X11 window delta, which also covers dragging the window.
+The image includes a **caret sensor**: IBus runs with the English keyboard engine and no panel, and only listens to the real caret that WeChat reports to its input context. `caret-bridge.py` pushes the caret rect and active X11 window position over WebSocket (`/ime-caret.ws`) and keeps `/ime-caret.json` as a fallback. The frontend places a caret-sized IME host input at that position, so the candidate window appears at the real caret; window movement is applied as an X11 window delta, which also covers dragging the window.
 
 The sensor does not participate in input: there is no Chinese engine and no input-method switching in the container; Chinese composition stays with the host IME. If the sensor is disabled or unavailable, the frontend falls back to detecting the teal caret in the video frame.
 
