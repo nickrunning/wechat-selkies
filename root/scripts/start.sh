@@ -40,6 +40,11 @@ fi
 
 nohup stalonetray --dockapp-mode simple > /dev/null 2>&1 &
 
+# start the English-only IBus caret sensor and its web bridge
+if [ -f /scripts/ime/caret-sensor-start.sh ]; then
+    /bin/bash /scripts/ime/caret-sensor-start.sh
+fi
+
 # start WeChat application in the background if exists and auto-start enabled
 if [ "$AUTO_START_WECHAT" = "true" ]; then
     if [ -f /usr/bin/wechat ]; then

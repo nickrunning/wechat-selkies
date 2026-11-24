@@ -35,6 +35,14 @@ RUN if [ "$INSTALL_PCMANFM" = "true" ]; then \
         apt-get install -y --no-install-recommends pcmanfm; \
     fi
 
+# IBus is used only as a caret sensor (English keyboard engine, panel off).
+# The application reports its real caret position to IBus; Chinese input
+# stays with the host IME.
+ARG INSTALL_IBUS_CARET=true
+RUN if [ "$INSTALL_IBUS_CARET" = "true" ]; then \
+        apt-get install -y --no-install-recommends ibus dbus xdotool; \
+    fi
+
 RUN pip install --no-cache-dir python-xlib
 
 # Install WeChat based on target architecture
@@ -119,6 +127,11 @@ ENV WECHAT_NIGHTLY_STOP_TIME="23:30"
 ENV WECHAT_NIGHTLY_START_TIME="01:30"
 ENV ENABLE_WECHAT_AUTO_LOGIN="true"
 ENV AUTO_LOGIN_DELAY="3"
+ENV ENABLE_IBUS_CARET_SENSOR="true"
+ENV GTK_IM_MODULE="ibus"
+ENV QT_IM_MODULE="ibus"
+ENV XMODIFIERS="@im=ibus"
+ENV IBUS_ENABLE_SYNC_MODE="1"
 
 
 
@@ -127,3 +140,23 @@ RUN cp /usr/share/icons/hicolor/128x128/apps/wechat.png /usr/share/selkies/www/i
 
 # add local files
 COPY /root /
+
+# expose the caret sensor JSON to the web client
+RUN if [ -f /defaults/default.conf ]; then \
+        awk '{ print } /^server \{/ { print "  location = SUBFOLDERime-caret.json {"; print "    alias /config/ime-caret.json;"; print "    default_type application/json;"; print "    add_header Cache-Control \"no-store\";"; print "  }" }' /defaults/default.conf > /tmp/default.conf && \
+        mv /tmp/default.conf /defaults/default.conf; \
+    fi
+
+# anchor the host IME candidate window to the WeChat text caret.
+# init-nginx recreates /usr/share/selkies/web from the dashboard sources at
+# every start, so patch the sources rather than the generated web directory.
+ARG ENABLE_IME_ANCHOR=true
+COPY root/scripts/ime/ime-anchor.js /usr/share/selkies/selkies-dashboard/ime-anchor.js
+COPY root/scripts/ime/ime-anchor.js /usr/share/selkies/selkies-dashboard-wish/ime-anchor.js
+RUN if [ "$ENABLE_IME_ANCHOR" = "true" ]; then \
+        for dashboard in /usr/share/selkies/selkies-dashboard /usr/share/selkies/selkies-dashboard-wish; do \
+            if [ -f "$dashboard/index.html" ] && grep -q '</body>' "$dashboard/index.html"; then \
+                sed -i 's#</body>#<script src="ime-anchor.js"></script></body>#' "$dashboard/index.html"; \
+            fi; \
+        done; \
+    fi

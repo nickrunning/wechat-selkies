@@ -24,4 +24,5 @@ services:
       - WECHAT_NIGHTLY_START_TIME=${WECHAT_NIGHTLY_START_TIME:-01:30}
       - ENABLE_WECHAT_AUTO_LOGIN=${ENABLE_WECHAT_AUTO_LOGIN:-false}
       - AUTO_LOGIN_DELAY=${AUTO_LOGIN_DELAY:-3}
+      - ENABLE_IBUS_CARET_SENSOR=${ENABLE_IBUS_CARET_SENSOR:-true}
     shm_size: "${SHM_SIZE:-1gb}"        # recommended, will improve performance

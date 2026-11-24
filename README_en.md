@@ -182,6 +182,7 @@ Configure the following environment variables in `docker-compose.yml`. Variables
 | `WECHAT_NIGHTLY_START_TIME` | `01:30` | Daily scheduled restart time for WeChat (HH:MM format) |
 | `ENABLE_WECHAT_AUTO_LOGIN` | `true` | Whether to automatically detect and click the login button after WeChat starts/restarts |
 | `AUTO_LOGIN_DELAY` | `3` | Delay in seconds after WeChat launch to wait for UI rendering before login action |
+| `ENABLE_IBUS_CARET_SENSOR` | `true` | Whether to run an English-keyboard, panel-less IBus as a caret sensor (not used for Chinese input) |
 
 
 
@@ -219,6 +220,18 @@ devices:
   - /dev/dri:/dev/dri
 ```
 
+### Input Method (IME)
+
+Selkies receives keyboard events through a full-screen hidden input in the browser. The browser anchors the host input method's candidate window to that input's caret. Video frames have encoding and transport latency, so visual caret detection lags when the window is dragged or resized.
+
+The image includes a **caret sensor**: IBus runs with the English keyboard engine and no panel, and only listens to the real caret that WeChat reports to its input context. `caret-bridge.py` writes the caret rect and active X11 window position to `/ime-caret.json`. The frontend places a caret-sized IME host input at that position, so the candidate window appears at the real caret; window movement is applied as an X11 window delta, which also covers dragging the window.
+
+The sensor does not participate in input: there is no Chinese engine and no input-method switching in the container; Chinese composition stays with the host IME. If the sensor is disabled or unavailable, the frontend falls back to detecting the teal caret in the video frame.
+
+- `ENABLE_IBUS_CARET_SENSOR=false`: disable the sensor (fall back to visual detection)
+- `--build-arg ENABLE_IME_ANCHOR=false`: disable the whole caret anchor patch
+- `window.__selkiesImeAnchorOffset = { x: 0, y: 0 }`: temporary calibration from DevTools
+
 ## Directory Structure
 
 ```
@@ -233,6 +246,10 @@ wechat-selkies/
 └── root/                       # Container initialization files
     ├── defaults/
     │   └── autostart           # Auto-start configuration
+    ├── scripts/
+    │   ├── ime/ime-anchor.js       # Host IME candidate caret anchor
+    │   ├── ime/caret-sensor-start.sh # English, panel-less IBus caret sensor
+    │   └── ime/caret-bridge.py     # IBus caret coordinates -> /ime-caret.json
     └── wechat.png              # WeChat icon
 ```
 

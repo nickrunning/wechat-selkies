@@ -184,6 +184,7 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
 | `WECHAT_NIGHTLY_START_TIME` | `01:30` | 每日自动重新启动微信的时刻（HH:MM 格式） |
 | `ENABLE_WECHAT_AUTO_LOGIN` | `true` | 是否在微信启动/重启后自动识别并点击登录按钮 |
 | `AUTO_LOGIN_DELAY` | `3` | 微信启动后等待 UI 渲染完成的秒数 |
+| `ENABLE_IBUS_CARET_SENSOR` | `true` | 是否运行英文键盘、无面板的 IBus 作为光标传感器（不参与中文输入） |
 
 
 
@@ -221,6 +222,18 @@ devices:
   - /dev/dri:/dev/dri
 ```
 
+### 输入法（IME）
+
+Selkies 用全屏隐藏输入框接收键盘事件，浏览器会把宿主输入法的候选框锚定到这个输入框的光标处。视频画面有编码/传输延迟，单靠画面检测光标在窗口拖动或缩放时会滞后。
+
+镜像内置了一个**光标传感器**：以英文键盘引擎、无面板方式运行 IBus，只监听微信等应用向输入法上报的真实光标位置；`caret-bridge.py` 把光标坐标和活动窗口位置写入 `/ime-caret.json`。前端在光标位置放一个光标大小的输入法宿主输入框，候选框就会出现在真实光标处；窗口移动时按 X11 窗口位移平移，所以拖动窗口也能跟随。
+
+这个传感器不参与输入：容器内没有中文输入法引擎，也没有中英文输入法切换，中文组字仍由你本机的输入法完成。传感器不可用或关闭时，前端会退回到从视频画面检测青色光标。
+
+- `ENABLE_IBUS_CARET_SENSOR=false`：关闭传感器（退回画面检测）
+- `--build-arg ENABLE_IME_ANCHOR=false`：关闭整个光标锚定补丁
+- `window.__selkiesImeAnchorOffset = { x: 0, y: 0 }`：DevTools 里临时校准
+
 ## 目录结构
 
 ```
@@ -234,6 +247,10 @@ wechat-selkies/
 └── root/                       # 容器初始化文件
     ├── defaults/
     │   └── autostart           # 自动启动配置
+    ├── scripts/
+    │   ├── ime/ime-anchor.js       # 本机输入法候选框光标锚定
+    │   ├── ime/caret-sensor-start.sh # 英文、无面板的 IBus 光标传感器
+    │   └── ime/caret-bridge.py     # IBus 光标坐标 → /ime-caret.json
     └── wechat.png              # 微信图标
 ```
 
