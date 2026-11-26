@@ -153,7 +153,8 @@ docker run -it --env-file .env -p 3001:3001 -v ./config:/config nickrunning/wech
 
 以下三项只涉及定制部署。
 
-- **反向代理**。如果 SWAG 已将整个站点转发到 `https://wechat-selkies:3001` 并启用 WebSocket，可以沿用现有配置。若以前将 WebSocket 单独转发到 `CUSTOM_WS_PORT`，请把这条规则改为与网页相同的上游地址和端口。`CUSTOM_PORT` 和 `CUSTOM_HTTPS_PORT` 仍可指定容器的 Web 端口。
+- **反向代理**。如果 SWAG 已将整个站点转发到 `https://wechat-selkies:3001` 并启用 WebSocket，可以沿用这条转发规则。若以前单独转发到 `CUSTOM_WS_PORT`，请改为与网页相同的上游地址和端口。`CUSTOM_PORT` 和 `CUSTOM_HTTPS_PORT` 仍可指定容器的 Web 端口。
+  如果网页能登录，但桌面连不上，且容器日志出现 `disallowed Origin`，在微信服务的 Compose `environment` 中设置 `SELKIES_ALLOWED_ORIGINS=https://wechat.example.com` 后重建容器。将示例替换为浏览器实际访问的协议、域名和非默认端口，多个来源用逗号分隔。
 - **桌面限制**。如果启用了 LinuxServer 的 `HARDEN_DESKTOP`、`HARDEN_OPENBOX`、`DISABLE_SUDO` 等开关，新容器会提示并退出。先确认新版部署满足原有访问限制，再从 Compose 中移除相应开关。
 - **自定义脚本**。如果用宿主机目录覆盖了容器的 `/scripts`，请把新版脚本同步到该目录。
 

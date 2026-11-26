@@ -151,7 +151,8 @@ The `latest` tag follows stable releases. The `edge` tag follows builds from `ma
 
 These three cases apply to custom deployments.
 
-- **Reverse proxy**. A SWAG configuration that forwards the whole site to `https://wechat-selkies:3001` with WebSocket support can be reused. If you routed WebSockets to a separate `CUSTOM_WS_PORT`, point that rule at the same upstream address and port as the web page. `CUSTOM_PORT` and `CUSTOM_HTTPS_PORT` still set the web listener ports.
+- **Reverse proxy**. You can keep the SWAG rule that forwards the whole site, including WebSockets, to `https://wechat-selkies:3001`. If you routed WebSockets to a separate `CUSTOM_WS_PORT`, point that rule at the same upstream address and port as the web page. `CUSTOM_PORT` and `CUSTOM_HTTPS_PORT` still set the web listener ports.
+  If web login succeeds but the desktop cannot connect and the container logs show `disallowed Origin`, set `SELKIES_ALLOWED_ORIGINS=https://wechat.example.com` in the WeChat service's Compose `environment` and recreate the container. Use the scheme and hostname from the browser address, including any non-default port. Separate multiple origins with commas.
 - **Desktop restrictions**. If you enabled LinuxServer switches such as `HARDEN_DESKTOP`, `HARDEN_OPENBOX`, or `DISABLE_SUDO`, the new container reports an error and exits. Verify that the new deployment enforces your original access restrictions before removing those switches from Compose.
 - **Custom scripts**. If a host directory is mounted over `/scripts`, update the scripts in that directory to match the new image.
 
