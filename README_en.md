@@ -12,7 +12,7 @@
 
 English | [中文](README.md)
 
-Docker-based WeChat/QQ Linux client with browser access support using Selkies WebRTC technology. AI agents can now operate WeChat.
+Docker-based WeChat/QQ Linux client with browser access support using Selkies WebRTC technology. AI agents can now operate WeChat through the API, with an optional [WeChat agent skill](#control-wechat-through-the-api-with-an-ai-agent).
 
 ## Project Overview
 
@@ -34,7 +34,7 @@ Before upgrading an older deployment to the new `latest`, back up `/config` and 
 - 🖥️ **AMD64 and ARM64 Architecture Support**: Compatible with mainstream CPU architectures
 - 🔧 **Hardware Acceleration**: Optional GPU hardware acceleration support
 - 🤖 **Auto Start**: Configurable auto-start for WeChat and QQ clients (optional)
-- 📋 **Desktop Shortcut Integration**: Automatically adds `.desktop` shortcuts from `~/Desktop/` to the right-click menu
+- 📋 **Desktop Shortcut Integration**: Automatically adds `.desktop` shortcuts from `~/Desktop/` to the right-click menu. Select **Reload Menu** to refresh it manually.
 - 📂 **File Manager**: Built-in PCManFM lightweight file manager, accessible from the right-click menu for easy file management inside the container
 
 ## Screenshots
@@ -156,24 +156,29 @@ These three cases apply to custom deployments.
 - **Desktop restrictions**. If you enabled LinuxServer switches such as `HARDEN_DESKTOP`, `HARDEN_OPENBOX`, or `DISABLE_SUDO`, the new container reports an error and exits. Verify that the new deployment enforces your original access restrictions before removing those switches from Compose.
 - **Custom scripts**. If a host directory is mounted over `/scripts`, update the scripts in that directory to match the new image.
 
-### Configuration
+### Control WeChat through the API with an AI agent
 
-#### Control WeChat with Pelorus
+Sign in to WeChat in the browser desktop. Your agent can then open a specific chat, read visible messages, or send a message at your request. The API is enabled by default. Append `/api/pelorus/` to your desktop URL and use the same web username and password (HTTP Basic authentication). External agents do not need a model key in the container.
 
-The desktop runs the built-in Selkies X11 window manager with Pelorus enabled.
+**Install the WeChat skill.** On the machine where your agent runs, open the project directory where you want to use the skill. With Node.js 22.20 or later, run the following command and select Codex, Claude Code, or another supported agent when prompted.
 
-Open `https://localhost:3001/` to sign in to WeChat. The agent UI is at `/pelorus/`. External agents can call the REST API with the same desktop credentials without a model key. These examples prompt for the password and accept the local self-signed certificate:
+```bash
+npx skills add nickrunning/wechat-selkies --skill wechat-selkies
+```
+
+The skill is installed in the current project by default. Append `-g` to use it across projects. If you do not have Node.js, you can give [SKILL.md](skills/wechat-selkies/SKILL.md) directly to an agent that can make HTTP requests. [Installer documentation](https://github.com/vercel-labs/skills#install-a-skill)
+
+Give the agent an HTTPS desktop URL it can reach and configure its web login credentials. Then try asking it to use the wechat-selkies skill to open File Transfer Assistant and read the latest visible message.
+
+To list desktop windows on a local deployment, run the command below and enter your web password when prompted. The default username is `abc`. Use `-k` only for the local self-signed certificate.
 
 ```bash
 curl -kfsS -u abc https://localhost:3001/api/pelorus/desktop
-# Replace 1 with the WeChat window id from the desktop response.
-curl -kfsS -u abc https://localhost:3001/api/pelorus/window/1/tree
-curl -kfsS -u abc https://localhost:3001/api/pelorus/tools
 ```
 
-Call a tool with `POST /api/pelorus/tool`, for example `{"name":"look","arguments":{"window":1}}`. To read the current conversation, verify its title and read the visible children of the message list. After adding a desktop shortcut, select **Reload Menu** in the desktop context menu to refresh the list.
+The optional `/pelorus/` page lets you give instructions to a built-in assistant. Configure a model there if you want to use that assistant.
 
-Pelorus reads Openbox-format menus and a subset of its window rules. The desktop page and its installed web app use `TITLE` and the WeChat icon. The `/pelorus/` tool page has its own name and icon. [Upstream Pelorus API](https://github.com/selkies-project/selkies/blob/f956c26/crates/selkies/src/pelorus.rs)
+### Configuration
 
 #### Docker Hub Push Configuration
 This project supports pushing to both GitHub Container Registry and Docker Hub. Docker Hub push is optional and requires manual configuration. Please add the following Environment Secrets and Environment Variables in your repository to enable Docker Hub push functionality:
@@ -292,6 +297,7 @@ docker compose logs -f wechat-selkies
 - **Base Image**: `ghcr.io/selkies-project/selkies/base:main-ubuntu26.04`
 - **WeChat Client**: Official WeChat Linux version
 - **Web Technology**: Selkies WebRTC
+- **Desktop and API**: The built-in Selkies X11 window manager reads Openbox-format menus and supports a subset of Openbox window rules. Pelorus provides the desktop control API. The desktop page and its installed web app use `TITLE` and the WeChat icon. The web assistant uses the Pelorus name and icon. [Upstream API](https://github.com/selkies-project/selkies/blob/f956c26/crates/selkies/src/pelorus.rs)
 - **Containerization**: Docker + Docker Compose
 
 ## Contributing

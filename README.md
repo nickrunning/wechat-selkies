@@ -12,7 +12,7 @@
 
 中文 | [English](README_en.md)
 
-基于 Docker 的微信/QQ Linux 客户端，使用 Selkies WebRTC 技术提供浏览器访问支持。现已支持 AI Agent 操作。
+基于 Docker 的微信/QQ Linux 客户端，使用 Selkies WebRTC 技术提供浏览器访问支持。现已支持 AI Agent 通过 API 操作微信，并提供可安装的 [Agent Skill](#ai-agent-通过-api-操作微信)。
 
 ## 项目简介
 
@@ -34,7 +34,7 @@
 - 🖥️ **AMD64和ARM64架构支持**：兼容主流CPU架构
 - 🔧 **硬件加速**：可选的 GPU 硬件加速支持
 - 🤖 **自动启动**：可配置自动启动微信和QQ客户端（可选）
-- 📋 **桌面快捷方式集成**：自动将 `~/Desktop/` 下的 `.desktop` 快捷方式添加到右键菜单
+- 📋 **桌面快捷方式集成**：自动将 `~/Desktop/` 下的 `.desktop` 快捷方式添加到右键菜单，也可选择 **Reload Menu** 手动刷新
 - 📂 **文件管理器**：内置 PCManFM 轻量文件管理器，右键菜单即可启动，方便管理容器内文件
 
 ## 截图展示
@@ -158,24 +158,29 @@ docker run -it --env-file .env -p 3001:3001 -v ./config:/config nickrunning/wech
 - **桌面限制**。如果启用了 LinuxServer 的 `HARDEN_DESKTOP`、`HARDEN_OPENBOX`、`DISABLE_SUDO` 等开关，新容器会提示并退出。先确认新版部署满足原有访问限制，再从 Compose 中移除相应开关。
 - **自定义脚本**。如果用宿主机目录覆盖了容器的 `/scripts`，请把新版脚本同步到该目录。
 
-### 配置说明
+### AI Agent 通过 API 操作微信
 
-#### 通过 Pelorus 操作微信
+先在浏览器桌面登录微信。你的 AI Agent 可以通过 API 打开指定会话、读取界面上可见的消息，或按你的指示发送消息。API 默认开启，地址是桌面网址后加 `/api/pelorus/`，使用同一组 Web 用户名和密码（HTTP Basic 认证），无需在容器中配置模型密钥。
 
-桌面默认使用 Selkies 内置的 X11 窗口管理器，并启用 Pelorus。
+**安装微信操作技能**。在运行 Agent 的电脑上，进入你希望使用技能的项目目录。使用 Node.js 22.20 或更高版本运行以下命令，按提示选择 Codex、Claude Code 或其他受支持的 Agent。
 
-浏览器打开 `https://localhost:3001/` 登录微信，`/pelorus/` 是 Agent 界面。外部 Agent 可以使用同一地址和 Web 用户名、密码直接调用 REST API，无需配置模型密钥。以下命令会提示输入密码，`-k` 用于本机自签证书。
+```bash
+npx skills add nickrunning/wechat-selkies --skill wechat-selkies
+```
+
+默认只安装到当前项目。要在多个项目中使用，可在命令末尾加 `-g`。没有 Node.js 时，也可将 [SKILL.md](skills/wechat-selkies/SKILL.md) 直接交给能调用 HTTP 的 Agent 阅读。[安装工具说明](https://github.com/vercel-labs/skills#install-a-skill)
+
+安装后，给 Agent 配置它能访问的 HTTPS 桌面地址和 Web 登录凭据，再试一句：“使用 wechat-selkies 技能打开文件传输助手，读出最新一条可见消息。”
+
+在本机测试时，下面的命令会提示输入 Web 密码，并列出桌面窗口。用户名默认是 `abc`，`-k` 仅用于本机自签名证书。
 
 ```bash
 curl -kfsS -u abc https://localhost:3001/api/pelorus/desktop
-# 将 1 换成上一步返回的微信窗口 id
-curl -kfsS -u abc https://localhost:3001/api/pelorus/window/1/tree
-curl -kfsS -u abc https://localhost:3001/api/pelorus/tools
 ```
 
-用 `POST /api/pelorus/tool` 调用工具，例如 `{"name":"look","arguments":{"window":1}}`。读取聊天正文时，先确认会话标题，再读取消息列表中的可见条目。添加桌面快捷方式后，可在右键菜单中选择 **Reload Menu** 刷新列表。
+`/pelorus/` 是可选的网页助手。只有想直接在这个页面给助手下指令时，才需要在页面中配置模型。
 
-Pelorus 读取 Openbox 格式的菜单和部分窗口规则。桌面网页及其安装后的 Web 应用使用 `TITLE` 和微信图标。`/pelorus/` 工具页使用 Pelorus 的名称与图标。[上游 Pelorus 接口](https://github.com/selkies-project/selkies/blob/f956c26/crates/selkies/src/pelorus.rs)
+### 配置说明
 
 #### Docker Hub 推送配置
 
@@ -293,6 +298,7 @@ docker compose logs -f wechat-selkies
 - **基础镜像**：`ghcr.io/selkies-project/selkies/base:main-ubuntu26.04`
 - **微信客户端**：官方微信 Linux 版本
 - **Web 技术**：Selkies WebRTC
+- **桌面与 API**：Selkies 内置 X11 窗口管理器读取 Openbox 格式菜单和部分窗口规则，Pelorus 提供桌面操作 API。桌面网页及其安装后的 Web 应用使用 `TITLE` 和微信图标，网页助手使用 Pelorus 的名称与图标。[上游接口](https://github.com/selkies-project/selkies/blob/f956c26/crates/selkies/src/pelorus.rs)
 - **容器化**：Docker + Docker Compose
 
 ## 贡献指南
