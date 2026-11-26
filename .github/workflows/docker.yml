@@ -8,7 +8,9 @@ on:
     paths:
       - 'versions/upstream.env'
       - 'Dockerfile'
+      - '.dockerignore'
       - 'root/**'
+      - '.github/tests/test-volume-migration.sh'
       - '.github/workflows/docker.yml'
     tags:
       - 'v*'
@@ -36,10 +38,37 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v6
 
+    - name: Select publish channel
+      id: channel
+      shell: bash
+      run: |
+        number='(0|[1-9][0-9]*)'
+        version="v${number}\.${number}\.${number}"
+        identifier='(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+        prerelease="${identifier}(\.${identifier})*"
+
+        channel=build
+        if [[ "$GITHUB_REF" == refs/heads/master ]]; then
+          channel=edge
+        elif [[ "$GITHUB_EVENT_NAME" == push && "$GITHUB_REF" == refs/tags/* ]]; then
+          if [[ "$GITHUB_REF_NAME" =~ ^${version}$ ]]; then
+            channel=stable
+          elif [[ "$GITHUB_REF_NAME" =~ ^${version}-${prerelease}$ ]]; then
+            channel=prerelease
+          fi
+        fi
+        echo "name=$channel" >> "$GITHUB_OUTPUT"
+
+    - name: Set up ARM64 emulation
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: arm64
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
     - name: Login to GitHub Container Registry
+      if: steps.channel.outputs.name != 'build'
       uses: docker/login-action@v3
       with:
         registry: ${{ env.REGISTRY }}
@@ -47,7 +76,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Login to Docker Hub
-      if: vars.ENABLE_DOCKERHUB == 'true'
+      if: steps.channel.outputs.name != 'build' && vars.ENABLE_DOCKERHUB == 'true'
       uses: docker/login-action@v3
       with:
         registry: ${{ env.DOCKERHUB_REGISTRY }}
@@ -64,10 +93,8 @@ jobs:
         flavor: |
           latest=false
         tags: |
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
-          type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'master') || startsWith(github.ref, 'refs/tags/') }}
+          type=semver,pattern={{version}},enable=${{ steps.channel.outputs.name == 'stable' || steps.channel.outputs.name == 'prerelease' }}
+          type=raw,value=edge,enable=${{ steps.channel.outputs.name == 'edge' }}
 
     - name: Load upstream version state
       run: |
@@ -75,13 +102,13 @@ jobs:
           grep -v '^#' versions/upstream.env | grep -v '^\s*$' | sed 's/"//g' >> "$GITHUB_ENV"
         fi
 
-    - name: Build and push Docker image
+    - name: Build full Docker image
       id: build-image
       uses: docker/build-push-action@v5
       with:
         context: .
         platforms: linux/amd64,linux/arm64
-        push: true
+        push: ${{ steps.channel.outputs.name != 'build' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
         build-args: |
@@ -106,18 +133,16 @@ jobs:
         flavor: |
           latest=false
         tags: |
-          type=semver,pattern={{version}},suffix=-minimal
-          type=semver,pattern={{major}}.{{minor}},suffix=-minimal
-          type=semver,pattern={{major}},suffix=-minimal
-          type=raw,value=minimal,enable=${{ github.ref == format('refs/heads/{0}', 'master') || startsWith(github.ref, 'refs/tags/') }}
+          type=semver,pattern={{version}},suffix=-minimal,enable=${{ steps.channel.outputs.name == 'stable' || steps.channel.outputs.name == 'prerelease' }}
+          type=raw,value=edge-minimal,enable=${{ steps.channel.outputs.name == 'edge' }}
 
-    - name: Build and push minimal Docker image
+    - name: Build minimal Docker image
       id: build-minimal
       uses: docker/build-push-action@v5
       with:
         context: .
         platforms: linux/amd64,linux/arm64
-        push: true
+        push: ${{ steps.channel.outputs.name != 'build' }}
         tags: ${{ steps.meta-minimal.outputs.tags }}
         labels: ${{ steps.meta-minimal.outputs.labels }}
         build-args: |
@@ -130,15 +155,57 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
+    - name: Validate volume migration on release images
+      if: steps.channel.outputs.name == 'stable'
+      shell: bash
+      env:
+        FULL_DIGEST: ${{ steps.build-image.outputs.digest }}
+        MINIMAL_DIGEST: ${{ steps.build-minimal.outputs.digest }}
+      run: |
+        repository="$REGISTRY/${IMAGE_NAME,,}"
+        for digest in "$FULL_DIGEST" "$MINIMAL_DIGEST"; do
+          image="$repository@$digest"
+          docker pull --platform linux/amd64 "$image"
+          bash .github/tests/test-volume-migration.sh "$image"
+        done
+
     - name: Generate artifact attestation
-      if: github.event_name != 'workflow_dispatch'
+      if: steps.channel.outputs.name != 'build' && github.event_name != 'workflow_dispatch'
       uses: actions/attest-build-provenance@v1
       with:
         subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         subject-digest: ${{ steps.build-image.outputs.digest }}
         push-to-registry: true
 
+    - name: Promote stable Docker tags
+      if: steps.channel.outputs.name == 'stable'
+      shell: bash
+      env:
+        FULL_DIGEST: ${{ steps.build-image.outputs.digest }}
+        MINIMAL_DIGEST: ${{ steps.build-minimal.outputs.digest }}
+        FULL_VERSION: ${{ steps.meta.outputs.version }}
+        ENABLE_DOCKERHUB: ${{ vars.ENABLE_DOCKERHUB }}
+        DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+      run: |
+        repositories=("$REGISTRY/${IMAGE_NAME,,}")
+        if [[ "$ENABLE_DOCKERHUB" == true ]]; then
+          repositories+=("$DOCKERHUB_REGISTRY/${DOCKERHUB_IMAGE,,}")
+        fi
+        major="${FULL_VERSION%%.*}"
+        minor="${FULL_VERSION%.*}"
+
+        # A single index source is copied as-is by imagetools.
+        for repository in "${repositories[@]}"; do
+          docker buildx imagetools create \
+            --tag "$repository:latest" --tag "$repository:$major" --tag "$repository:$minor" \
+            "$repository@$FULL_DIGEST"
+          docker buildx imagetools create \
+            --tag "$repository:minimal" --tag "$repository:$major-minimal" --tag "$repository:$minor-minimal" \
+            "$repository@$MINIMAL_DIGEST"
+        done
+
     - name: Output Docker image information
+      if: steps.channel.outputs.name != 'build'
       run: |
         {
           echo "## 🐳 Docker Images Published"
@@ -155,6 +222,10 @@ jobs:
           echo "\`\`\`"
           echo "${{ steps.meta-minimal.outputs.tags }}"
           echo "\`\`\`"
+
+          if [ "${{ steps.channel.outputs.name }}" == "stable" ]; then
+            echo "Stable aliases and major/minor version tags promoted after volume migration checks."
+          fi
 
           if [ "${{ vars.ENABLE_DOCKERHUB }}" == "true" ]; then
             echo ""
@@ -174,11 +245,12 @@ jobs:
         } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Create GitHub Release
-      if: startsWith(github.ref, 'refs/tags/v')
+      if: steps.channel.outputs.name == 'stable' || steps.channel.outputs.name == 'prerelease'
       uses: softprops/action-gh-release@v2
       with:
         generate_release_notes: true
-        make_latest: true
+        prerelease: ${{ steps.channel.outputs.name == 'prerelease' }}
+        make_latest: ${{ steps.channel.outputs.name == 'stable' }}
         body: |
           ## 🐳 Docker Images
           
@@ -186,29 +258,29 @@ jobs:
           **GitHub Container Registry:**
           ```bash
           docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          ```
-          
-          **Docker Hub** (if enabled):
-          ```bash
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ steps.meta.outputs.version }}
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:latest
           ```
           
           ### Minimal (WeChat only)
           ```bash
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:minimal
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta-minimal.outputs.version }}
           ```
           
+          ${{ vars.ENABLE_DOCKERHUB == 'true' && format('Docker Hub also provides `{0}/{1}:{2}` and `{0}/{1}:{3}`.', secrets.DOCKERHUB_USERNAME, github.event.repository.name, steps.meta.outputs.version, steps.meta-minimal.outputs.version) || '' }}
+
+          Stable releases update the `latest` (full) and `minimal` aliases. The
+          `edge` (full) and `edge-minimal` aliases follow builds from `master`.
+
           ## 🚀 Quick Start
+          Create a `.env` file with a nonempty `PASSWORD`. The default username is `abc`.
+
           **Full:**
           ```bash
-          docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker run -it --env-file .env -p 3001:3001 -v ./config:/config ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           ```
           
           **Minimal:**
           ```bash
-          docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:minimal
+          docker run -it --env-file .env -p 3001:3001 -v ./config:/config ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta-minimal.outputs.version }}
           ```
           
           Then visit: https://localhost:3001

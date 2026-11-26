@@ -1,12 +1,19 @@
 #!/bin/bash
 # Regenerate openbox right-click menu from defaults + ~/Desktop/*.desktop files
+set -e
 
 MENU_DEFAULT="/defaults/menu.xml"
 MENU_TARGET="/config/.config/openbox/menu.xml"
-MENU_TMP="/tmp/menu.xml"
+MENU_TMP=$(mktemp)
+trap 'rm -f "$MENU_TMP"' EXIT
 
 mkdir -p /config/.config/openbox
 cp "$MENU_DEFAULT" "$MENU_TMP"
+if [[ ! -x /usr/bin/qq ]]; then sed -i '\|<command>/scripts/qq/qq-start.sh</command>|d' "$MENU_TMP"; fi
+if ! command -v pcmanfm >/dev/null; then sed -i '\|<command>pcmanfm</command>|d' "$MENU_TMP"; fi
+if [[ ${SELKIES_WM:-false} == true ]]; then
+    sed -i '/<\/menu>/i\<item label="Reload Menu"><action name="Reconfigure"/></item>' "$MENU_TMP"
+fi
 
 if ls "$HOME/Desktop/"*.desktop >/dev/null 2>&1; then
     for desktop_file in "$HOME/Desktop/"*.desktop; do
@@ -47,11 +54,14 @@ if ls "$HOME/Desktop/"*.desktop >/dev/null 2>&1; then
         name=$(echo "$name" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g')
         icon=$(echo "$icon" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g; s/"/\&quot;/g')
 
-        sed -i "/<menu id=\"root-menu\" label=\"MENU\">/a \\<item label=\"${name}\" icon=\"${icon}\"><action name=\"Execute\"><command>${exec_cmd}</command></action></item>" "$MENU_TMP"
+        printf '<item label="%s" icon="%s"><action name="Execute"><command>%s</command></action></item>\n' \
+            "$name" "$icon" "$exec_cmd" | sed -i '/<menu id="root-menu" label="MENU">/r /dev/stdin' "$MENU_TMP"
     done
 fi
 
 if [ ! -f "$MENU_TARGET" ] || ! cmp -s "$MENU_TMP" "$MENU_TARGET"; then
-    cp "$MENU_TMP" "$MENU_TARGET"
-    openbox --reconfigure 2>/dev/null || true
+    cat "$MENU_TMP" > "$MENU_TARGET"
+    if [[ ${SELKIES_WM:-false} != true ]]; then
+        openbox --reconfigure 2>/dev/null || true
+    fi
 fi

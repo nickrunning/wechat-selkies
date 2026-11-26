@@ -3,22 +3,51 @@ services:
   wechat-selkies:
     build:
       context: .
+      args:
+        INSTALL_QQ: ${INSTALL_QQ:-true}
+        INSTALL_PCMANFM: ${INSTALL_PCMANFM:-true}
     image: wechat-selkies:latest
     container_name: wechat-selkies
     hostname: ${WECHAT_HOSTNAME:-}
     volumes:
       - ./config:/config
-    devices:
-      - /dev/dri:/dev/dri # optional, for hardware acceleration
+    # Optional GPU acceleration
+    # devices:
+    #   - /dev/dri:/dev/dri
     ports:
-      - "${HTTP_PORT:-3000}:3000"       # http port
-      - "${HTTPS_PORT:-3001}:3001"      # https port
+      - "${HTTP_PORT:-3000}:${SELKIES_PORT:-${CUSTOM_PORT:-3000}}"       # http port
+      - "${HTTPS_PORT:-3001}:${SELKIES_HTTPS_PORT:-${CUSTOM_HTTPS_PORT:-3001}}"      # https port
     restart: unless-stopped
     environment:
-      - PUID=${PUID:-1000}              # set user id according to your system
-      - PGID=${PGID:-100}               # set group id according to your system
-      - CUSTOM_USER=${CUSTOM_USER:-}    # recommended to set a custom user name
-      - PASSWORD=${PASSWORD:-}          # recommended to set a password for selkies web ui
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-100}
+      - TITLE=${TITLE:-WeChat-Selkies}
+      - CUSTOM_USER=${CUSTOM_USER:-abc}
+      - PASSWORD=${PASSWORD:-}
+      - FILE__PASSWORD
+      - SELKIES_BASIC_AUTH_PASSWORD_FILE
+      - SUBFOLDER=${SUBFOLDER:-/}
+      - SELKIES_SUBFOLDER=${SELKIES_SUBFOLDER:-}
+      - SELKIES_PORT=${SELKIES_PORT:-}
+      - SELKIES_HTTPS_PORT=${SELKIES_HTTPS_PORT:-}
+      - CUSTOM_PORT=${CUSTOM_PORT:-}
+      - CUSTOM_HTTPS_PORT=${CUSTOM_HTTPS_PORT:-}
+      - HARDEN_DESKTOP=${HARDEN_DESKTOP:-}
+      - HARDEN_OPENBOX=${HARDEN_OPENBOX:-}
+      - HARDEN_KEYBINDS
+      - DISABLE_OPEN_TOOLS
+      - DISABLE_SUDO
+      - DISABLE_TERMINALS
+      - DISABLE_CLOSE_BUTTON
+      - DISABLE_MOUSE_BUTTONS
+      - SELKIES_FILE_TRANSFERS
+      - FILE_MANAGER_PATH
+      - SELKIES_FILE_MANAGER_PATH
+      - SELKIES_PELORUS=${SELKIES_PELORUS:-true}
+      - TZ=${TZ:-Asia/Shanghai}
+      - LC_ALL=${LC_ALL:-zh_CN.UTF-8}
+      - AUTO_START_WECHAT=${AUTO_START_WECHAT:-true}
+      - AUTO_START_QQ=${AUTO_START_QQ:-false}
       - ENABLE_WECHAT_NIGHTLY_RESTART=${ENABLE_WECHAT_NIGHTLY_RESTART:-false}
       - WECHAT_NIGHTLY_STOP_TIME=${WECHAT_NIGHTLY_STOP_TIME:-23:30}
       - WECHAT_NIGHTLY_START_TIME=${WECHAT_NIGHTLY_START_TIME:-01:30}

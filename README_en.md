@@ -12,7 +12,7 @@
 
 English | [中文](README.md)
 
-Docker-based WeChat/QQ Linux client with browser access support using Selkies WebRTC technology.
+Docker-based WeChat/QQ Linux client with browser access support using Selkies WebRTC technology. AI agents can now operate WeChat.
 
 ## Project Overview
 
@@ -20,7 +20,7 @@ This project packages the official WeChat/QQ Linux client in a Docker container,
 
 ## Upgrade Notes
 
-> If some features are missing after an upgrade, please clear the `openbox` directory in the local mounted directory (e.g., `./config/.config/openbox`).
+Before upgrading an older deployment to the new `latest`, back up `/config` and keep the `PUID` and `PGID` from your existing Compose file. WeChat may ask you to scan a QR code or confirm on your phone after an update. [Upgrade and rollback steps](#upgrade-or-roll-back-from-an-older-image)
 
 > This repository includes automatic upstream WeChat version detection: GitHub Actions periodically checks the official `.deb` packages, updates `versions/upstream.env` when changes are detected, and then triggers the image build workflow.
 
@@ -30,13 +30,11 @@ This project packages the official WeChat/QQ Linux client in a Docker container,
 - 🐳 **Dockerized Deployment**: Simple containerized deployment with environment isolation
 - 🔒 **Data Persistence**: Supports persistent storage of configurations and chat records
 - 🎨 **Chinese Support**: Complete Chinese fonts and localization support, including local Chinese input methods
-- 🖼️ **Image Copy**: Support image copying through sidebar panel
-- 📁 **File Transfer**: Support file transfer through sidebar panel
+- 📁 **File transfer**: Upload and download files in the browser sidebar’s Files panel. The default directory inside the container is `/config/Desktop`.
 - 🖥️ **AMD64 and ARM64 Architecture Support**: Compatible with mainstream CPU architectures
 - 🔧 **Hardware Acceleration**: Optional GPU hardware acceleration support
-- 🪟 **Window Switcher**: Added a floating window switcher in the top left corner for easy switching to background windows, laying the foundation for adding other features in the future
 - 🤖 **Auto Start**: Configurable auto-start for WeChat and QQ clients (optional)
-- 📋 **Desktop Shortcut Integration**: Automatically scans `.desktop` files in `~/Desktop/` and adds them to the right-click menu, making it easy to launch third-party applications (e.g., apps installed via proot-apps)
+- 📋 **Desktop Shortcut Integration**: Automatically adds `.desktop` shortcuts from `~/Desktop/` to the right-click menu
 - 📂 **File Manager**: Built-in PCManFM lightweight file manager, accessible from the right-click menu for easy file management inside the container
 
 ## Screenshots
@@ -53,19 +51,21 @@ This project packages the official WeChat/QQ Linux client in a Docker container,
 
 ### Quick Deployment
 
+Create a `.env` file with a nonempty `PASSWORD` and optionally set `CUSTOM_USER` (default `abc`).
+
 1. **Direct deployment using pre-built images**
 GitHub Container Registry image:
 ```bash
-docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri ghcr.io/nickrunning/wechat-selkies:latest
+docker run -it --env-file .env -p 3001:3001 -v ./config:/config ghcr.io/nickrunning/wechat-selkies:latest
 ```
 Docker Hub image:
 ```bash
-docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickrunning/wechat-selkies:latest
+docker run -it --env-file .env -p 3001:3001 -v ./config:/config nickrunning/wechat-selkies:latest
 ```
 
 > **Minimal image**: If you only need WeChat (without QQ and file manager), use the `minimal` tag for a smaller image:
 > ```bash
-> docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri ghcr.io/nickrunning/wechat-selkies:minimal
+> docker run -it --env-file .env -p 3001:3001 -v ./config:/config ghcr.io/nickrunning/wechat-selkies:minimal
 > ```
 > Versioned minimal tags are also available, e.g. `:1.2.3-minimal`, `:1.2-minimal`, for pinning to a specific release.
 
@@ -75,6 +75,9 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
    > **Note**: 3001 port is for HTTPS access. If you need HTTP access, please map port 3000 as well.
 
 ### Docker Compose Deployment
+
+Use this example for a new deployment. For an upgrade, keep your existing Compose file and `.env`. [Upgrade and rollback steps](#upgrade-or-roll-back-from-an-older-image)
+
 1. **Create project directory and navigate into it**
    ```bash
    mkdir wechat-selkies
@@ -82,44 +85,29 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
    ```
 2. **Create `docker-compose.yml` file with the following content**
    ```yaml
-    services:
-      wechat-selkies:
-        image: nickrunning/wechat-selkies:latest    # or ghcr.io/nickrunning/wechat-selkies:latest
-        container_name: wechat-selkies
-        ports:
-          - "${HTTP_PORT:-3000}:3000"
-          - "${HTTPS_PORT:-3001}:3001"
-        restart: unless-stopped
-        volumes:
-          - ./config:/config
-        devices:
-          - /dev/dri:/dev/dri
-        environment:
-          - PUID=${PUID:-1000}
-          - PGID=${PGID:-100}
-          - TZ=Asia/Shanghai
-          - LC_ALL=zh_CN.UTF-8
-          - AUTO_START_WECHAT=true
-          - AUTO_START_QQ=false
-          - CUSTOM_USER=${CUSTOM_USER:-}
-          - PASSWORD=${PASSWORD:-}
-        shm_size: "${SHM_SIZE:-1gb}"
-    ```
-3. **Create `.env` file (optional)**
-
-   Copy `.env.example` and modify as needed. Variables not set will use default values:
-   ```bash
-   cp .env.example .env
+   services:
+     wechat-selkies:
+       image: nickrunning/wechat-selkies:latest    # or ghcr.io/nickrunning/wechat-selkies:latest
+       container_name: wechat-selkies
+       hostname: ${WECHAT_HOSTNAME:-}
+       volumes:
+         - ./config:/config
+       ports:
+         - "${HTTP_PORT:-3000}:3000"
+         - "${HTTPS_PORT:-3001}:3001"
+       restart: unless-stopped
+       environment:
+         - PUID=${PUID:-1000}
+         - PGID=${PGID:-100}
+         - CUSTOM_USER=${CUSTOM_USER:-abc}
+         - PASSWORD=${PASSWORD:-}
+         - ENABLE_WECHAT_AUTO_LOGIN=${ENABLE_WECHAT_AUTO_LOGIN:-false}
+       shm_size: "${SHM_SIZE:-1gb}"
    ```
-   `.env` file example:
-   ```env
-   HTTP_PORT=3000
-   HTTPS_PORT=3001
-   PUID=1000
-   PGID=100
-   # CUSTOM_USER=
-   # PASSWORD=
-   SHM_SIZE=1gb
+3. **Set the access password in `.env`**
+
+   ```dotenv
+   PASSWORD=replace-with-your-password
    ```
 4. **Start the service**
    ```bash
@@ -134,9 +122,12 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
    cd wechat-selkies
    ```
 
-2. **Start the service**
+2. **Copy the configuration, set `PASSWORD` in `.env`, and build**
+
    ```bash
-   docker compose up -d
+   cp .env.example .env
+   # Edit .env and set PASSWORD before running the next command.
+   docker compose up -d --build
    ```
 
 3. **Access WeChat**
@@ -148,9 +139,40 @@ docker run -it -p 3001:3001 -v ./config:/config --device /dev/dri:/dev/dri nickr
 > docker build --build-arg INSTALL_QQ=false --build-arg INSTALL_PCMANFM=false -t wechat-selkies:minimal .
 > ```
 
+When building from source, set `INSTALL_QQ=false` in `.env` to omit QQ.
+
+### Upgrade or roll back from an older image
+
+The `latest` tag follows stable releases. The `edge` tag follows builds from `master`.
+
+1. **Record the settings and back up.** Keep your Compose file, `.env`, and current image version or digest. If you omitted `PUID` and `PGID`, run `docker exec wechat-selkies id abc` before stopping the old LinuxServer container to see its actual IDs. Stop the container and back up all of `/config`, preserving numeric ownership and permissions.
+2. **Reuse the existing configuration.** Mount the same data at `/config` and keep the previous container's UID/GID. The supplied Compose file defaults to `1000:100`, and a direct `docker run` defaults to `911:911`. Set the old IDs explicitly if you switch deployment methods.
+3. **Verify or roll back.** Open WeChat after recreating the container and check your account and chat history. If the profile looks empty or access is denied, check the volume path, the active account directory’s owner, and any NAS ACLs. Archived accounts can stay read-only. Avoid recursive permission changes across the volume. To roll back, stop the new container, restore the backup and original configuration, then start the recorded image version or digest.
+
+These three cases apply to custom deployments.
+
+- **Reverse proxy**. A SWAG configuration that forwards the whole site to `https://wechat-selkies:3001` with WebSocket support can be reused. If you routed WebSockets to a separate `CUSTOM_WS_PORT`, point that rule at the same upstream address and port as the web page. `CUSTOM_PORT` and `CUSTOM_HTTPS_PORT` still set the web listener ports.
+- **Desktop restrictions**. If you enabled LinuxServer switches such as `HARDEN_DESKTOP`, `HARDEN_OPENBOX`, or `DISABLE_SUDO`, the new container reports an error and exits. Verify that the new deployment enforces your original access restrictions before removing those switches from Compose.
+- **Custom scripts**. If a host directory is mounted over `/scripts`, update the scripts in that directory to match the new image.
+
 ### Configuration
 
-For more custom configurations, please refer to [Selkies Base Images from LinuxServer](https://github.com/linuxserver/docker-baseimage-selkies).
+#### Control WeChat with Pelorus
+
+The desktop runs the built-in Selkies X11 window manager with Pelorus enabled.
+
+Open `https://localhost:3001/` to sign in to WeChat. The agent UI is at `/pelorus/`. External agents can call the REST API with the same desktop credentials without a model key. These examples prompt for the password and accept the local self-signed certificate:
+
+```bash
+curl -kfsS -u abc https://localhost:3001/api/pelorus/desktop
+# Replace 1 with the WeChat window id from the desktop response.
+curl -kfsS -u abc https://localhost:3001/api/pelorus/window/1/tree
+curl -kfsS -u abc https://localhost:3001/api/pelorus/tools
+```
+
+Call a tool with `POST /api/pelorus/tool`, for example `{"name":"look","arguments":{"window":1}}`. To read the current conversation, verify its title and read the visible children of the message list. After adding a desktop shortcut, select **Reload Menu** in the desktop context menu to refresh the list.
+
+Pelorus reads Openbox-format menus and a subset of its window rules. The desktop page and its installed web app use `TITLE` and the WeChat icon. The `/pelorus/` tool page has its own name and icon. [Upstream Pelorus API](https://github.com/selkies-project/selkies/blob/f956c26/crates/selkies/src/pelorus.rs)
 
 #### Docker Hub Push Configuration
 This project supports pushing to both GitHub Container Registry and Docker Hub. Docker Hub push is optional and requires manual configuration. Please add the following Environment Secrets and Environment Variables in your repository to enable Docker Hub push functionality:
@@ -164,55 +186,41 @@ This project supports pushing to both GitHub Container Registry and Docker Hub. 
 
 #### Environment Variables
 
-Configure the following environment variables in `docker-compose.yml`. Variables with `${VAR:-default}` syntax can be overridden via a `.env` file:
+To use additional `.env` variables with the quick-start example, add their entries to the service’s `environment` section. See the repository’s [docker-compose.yml](docker-compose.yml).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TITLE` | `WeChat Selkies` | Web UI title |
-| `PUID` | `1000` | User ID |
-| `PGID` | `100` | Group ID |
+| `TITLE` | `WeChat-Selkies` | Web UI title |
+| `PUID` | `1000` with Compose, `911` with `docker run` | Desktop session user ID |
+| `PGID` | `100` with Compose, `911` with `docker run` | Desktop session group ID |
 | `TZ` | `Asia/Shanghai` | Timezone setting |
 | `LC_ALL` | `zh_CN.UTF-8` | Locale setting |
-| `CUSTOM_USER` | - | Custom username (recommended) |
-| `PASSWORD` | - | Web UI access password (recommended) |
+| `CUSTOM_USER` | `abc` | Web UI username |
+| `PASSWORD` | - | Desktop and API password |
 | `AUTO_START_WECHAT` | `true` | Whether to automatically start the WeChat client |
 | `AUTO_START_QQ` | `false` | Whether to automatically start the QQ client |
 | `ENABLE_WECHAT_NIGHTLY_RESTART` | `false` | Whether to enable nightly auto-stop and auto-restart for WeChat |
 | `WECHAT_NIGHTLY_STOP_TIME` | `23:30` | Daily scheduled stop time for WeChat (HH:MM format) |
 | `WECHAT_NIGHTLY_START_TIME` | `01:30` | Daily scheduled restart time for WeChat (HH:MM format) |
-| `ENABLE_WECHAT_AUTO_LOGIN` | `true` | Whether to automatically detect and click the login button after WeChat starts/restarts |
+| `ENABLE_WECHAT_AUTO_LOGIN` | `false` in Compose, `true` with `docker run` | Whether to automatically detect and click the login button after WeChat starts/restarts |
 | `AUTO_LOGIN_DELAY` | `3` | Delay in seconds after WeChat launch to wait for UI rendering before login action |
 
-
+To use a password file, leave `PASSWORD` empty and set `SELKIES_BASIC_AUTH_PASSWORD_FILE` in the container environment to a file readable by the desktop user. Existing LinuxServer deployments can continue using `FILE__PASSWORD`.
 
 #### Port Configuration
 
-- `3001`: Web UI access port
+- Compose uses `HTTP_PORT` and `HTTPS_PORT` for host ports, defaulting to `3000` and `3001`.
+- To change a container listener, set `SELKIES_PORT` or `SELKIES_HTTPS_PORT` in the service’s `environment` section and update the container side of the corresponding `ports` mapping.
 
 #### Volume Mounts
 
 - `./config:/config`: WeChat configuration and data persistence directory
 
-> **Note:** If the right-click menu lacks `WeChat` related options after an upgrade, please clear the `openbox` directory in the local mounted directory (e.g., `./config/.config/openbox`).
-
-## Installing Third-Party Applications (e.g., Telegram)
-
-This project supports installing third-party Linux applications via [proot-apps](https://github.com/linuxserver/proot-apps). Here's how to install Telegram as an example:
-
-1. Open the container desktop in your browser
-2. Click the **Sidebar** on the left → **Applications**
-3. Find **Telegram** in the application list
-4. Click the **Install** button and wait for the installation to complete
-
-Once installed, the application shortcut will automatically appear in the `~/Desktop/` directory, and the **right-click menu will auto-refresh** — no container restart needed to launch the app from the menu.
-
-> **Tip:** To uninstall an application, go to Sidebar → Applications, select the app, and click **Uninstall**. The right-click menu will update automatically.
-
 ## Advanced Configuration
 
 ### Hardware Acceleration
 
-If your system supports GPU hardware acceleration, the Docker Compose configuration includes relevant device mapping:
+If your host has `/dev/dri`, add the following mapping to the Compose service to enable GPU hardware acceleration.
 
 ```yaml
 devices:
@@ -231,16 +239,15 @@ wechat-selkies/
 ├── README_en.md                # Project documentation (English)
 ├── config/                     # Configuration and data persistence directory
 └── root/                       # Container initialization files
-    ├── defaults/
-    │   └── autostart           # Auto-start configuration
-    └── wechat.png              # WeChat icon
+    ├── defaults/              # Menu template
+    └── scripts/               # Container and application startup scripts
 ```
 
 ## Troubleshooting
 
 ### Updating WeChat/QQ Version
 
-When WeChat or QQ displays a "version outdated" message, simply pull the latest image and recreate the container. Your chat history and configurations will be preserved:
+When WeChat or QQ displays a "version outdated" message, pull an updated image from your chosen release channel and recreate the container. Your chat history and configurations will be preserved:
 
 ```bash
 # Using pre-built images
@@ -281,7 +288,7 @@ docker compose logs -f wechat-selkies
 
 ## Technical Architecture
 
-- **Base Image**: `ghcr.io/linuxserver/baseimage-selkies:ubuntunoble`
+- **Base Image**: `ghcr.io/selkies-project/selkies/base:main-ubuntu26.04`
 - **WeChat Client**: Official WeChat Linux version
 - **Web Technology**: Selkies WebRTC
 - **Containerization**: Docker + Docker Compose
@@ -303,7 +310,6 @@ This project is licensed under **MIT License**. See the [LICENSE](LICENSE) file 
 ### 📜 License Statement
 
 - **Project License**: MIT License - A permissive open source license
-- **Dependency Note**: This project uses [LinuxServer.io baseimage-selkies](https://github.com/linuxserver/docker-baseimage-selkies) as base image
 - **License Compatibility**: Since this project only uses the base image without modifying its source code, following containerized software licensing practices, it can adopt the MIT license
 - **Open Source**: Complete project source code is publicly available on GitHub: https://github.com/nickrunning/wechat-selkies
 
@@ -338,7 +344,6 @@ This project is licensed under **MIT License**. See the [LICENSE](LICENSE) file 
 
 - [WeChat Official Website](https://weixin.qq.com/)
 - [Selkies WebRTC](https://github.com/selkies-project)
-- [LinuxServer.io](https://github.com/linuxserver)
 - [xiaoheiCat/docker-wechat-sogou-pinyin](https://github.com/xiaoheiCat/docker-wechat-sogou-pinyin)
 
 ## Star History

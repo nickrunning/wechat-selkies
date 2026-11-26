@@ -1,0 +1,121 @@
+#!/bin/bash
+set -eu
+
+fail() { echo "wechat-selkies: $*" >&2; exit 1; }
+
+for flag in HARDEN_DESKTOP HARDEN_OPENBOX HARDEN_KEYBINDS DISABLE_OPEN_TOOLS DISABLE_SUDO DISABLE_TERMINALS DISABLE_CLOSE_BUTTON DISABLE_MOUSE_BUTTONS; do
+    setting=${!flag:-false}
+    case ${setting,,} in
+        true|1) fail "$flag belongs to the old image. Configure the required Selkies access restrictions before removing it." ;;
+    esac
+done
+
+# Let Selkies resolve its own password settings. Compose can pass an empty PASSWORD.
+[[ -n ${PASSWORD:-} ]] || unset PASSWORD
+[[ -n ${SELKIES_BASIC_AUTH_PASSWORD:-} ]] || unset SELKIES_BASIC_AUTH_PASSWORD
+if [[ -z ${SELKIES_BASIC_AUTH_PASSWORD:-${PASSWORD:-}} && -z ${SELKIES_BASIC_AUTH_PASSWORD_FILE:-} ]]; then
+    # LinuxServer read FILE__ secrets before dropping privileges.
+    [[ -n ${FILE__PASSWORD:-} ]] || fail "Set PASSWORD for web access."
+    [[ -f $FILE__PASSWORD && -r $FILE__PASSWORD ]] || fail "Cannot read FILE__PASSWORD."
+    SELKIES_BASIC_AUTH_PASSWORD=$(<"$FILE__PASSWORD")
+    [[ -n $SELKIES_BASIC_AUTH_PASSWORD ]] || fail "FILE__PASSWORD is empty."
+    export SELKIES_BASIC_AUTH_PASSWORD
+fi
+# The old image authenticated at nginx even when inner-server auth was off.
+export SELKIES_ENABLE_BASIC_AUTH=true
+export CUSTOM_USER="${CUSTOM_USER:-abc}"
+export SELKIES_UI_TITLE="${SELKIES_UI_TITLE:-${TITLE:-WeChat-Selkies}}"
+export SELKIES_SUBFOLDER="${SELKIES_SUBFOLDER:-${SUBFOLDER:-/}}"
+export SELKIES_PORT="${SELKIES_PORT:-${CUSTOM_PORT:-3000}}"
+export SELKIES_HTTPS_PORT="${SELKIES_HTTPS_PORT:-${CUSTOM_HTTPS_PORT:-3001}}"
+if [[ ${PASSWD:-} == mypasswd ]]; then unset PASSWD; fi
+
+if (( EUID == 0 )); then
+    # Match the old LinuxServer image when run without the Compose defaults.
+    uid=${PUID:-911}
+    gid=${PGID:-911}
+else
+    uid=${PUID:-$EUID}
+    gid=${PGID:-$(id -g)}
+fi
+image_uid=$(id -u ubuntu)
+image_gid=$(id -g ubuntu)
+[[ $uid =~ ^[1-9][0-9]*$ && $gid =~ ^[1-9][0-9]*$ ]] || fail "PUID and PGID must be positive numeric IDs."
+
+session=()
+if (( EUID == 0 )); then
+    if [[ $image_uid != "$uid" || $image_gid != "$gid" ]]; then
+        if [[ $image_uid != "$uid" ]] && getent passwd "$uid" >/dev/null; then
+            fail "UID $uid is already assigned to another account in the image. Check PUID against the original container's UID."
+        fi
+        if ! getent group "$gid" >/dev/null; then groupadd -g "$gid" "wechat-gid-$gid"; fi
+        # shadow's usermod may recursively chown the account's home when IDs
+        # change. Detach the mounted profile before changing either ID.
+        usermod -d /nonexistent ubuntu
+        usermod -u "$uid" -g "$gid" ubuntu
+        usermod -d /config ubuntu
+        chown -R "$uid:$gid" /etc/service
+    fi
+    session_groups=$(id -G ubuntu)
+    # Keep supplemental groups explicitly supplied through Docker group_add.
+    for extra_gid in $(id -G); do
+        if [[ $extra_gid != 0 && " $session_groups " != *" $extra_gid "* ]]; then
+            session_groups+=" $extra_gid"
+        fi
+    done
+    for device in /dev/dri/card* /dev/dri/renderD*; do
+        [[ -c $device ]] || continue
+        device_gid=$(stat -c %g "$device")
+        if [[ $device_gid != 0 && " $session_groups " != *" $device_gid "* ]]; then
+            session_groups+=" $device_gid"
+        fi
+    done
+    session=(setpriv --reuid="$uid" --regid="$gid" --groups="${session_groups// /,}")
+    if ! "${session[@]}" sh -c 'test -w /config && test -x /config'; then
+        # Only the mount point may need a new owner. Undo that change if
+        # preflight fails, so an incorrect override leaves the old volume usable.
+        read -r previous_owner previous_mode < <(stat -c '%u:%g %a' /config)
+        mount_gid=$gid
+        # Shared NAS directories use setgid to give new files their existing
+        # group. Preserve that inheritance even if the session's GID differs.
+        if [[ -g /config ]]; then mount_gid=${previous_owner#*:}; fi
+        chown "$uid:$mount_gid" /config || fail "Cannot prepare /config for $uid:$gid. Check the host volume permissions."
+        trap 'chown "$previous_owner" /config && chmod "$previous_mode" /config' EXIT
+        if [[ $(stat -c %a /config) != "$previous_mode" ]]; then chmod "$previous_mode" /config; fi
+    fi
+elif [[ $EUID != "$uid" || $(id -g) != "$gid" || $image_uid != "$uid" ]]; then
+    fail "Compose user: overrides account setup. Remove user: and set PUID/PGID to the original container's IDs."
+fi
+
+# Check the shared directories the session uses. Individual accounts may be archived.
+"${session[@]}" /bin/bash -eu <<'CHECK'
+for path in /config /config/xwechat_files /config/.xwechat /config/.config /config/.local /config/.config/openbox; do
+    if [[ -e $path || -L $path ]]; then
+        if [[ ! -d $path || ! -r $path || ! -w $path || ! -x $path ]]; then
+            echo "wechat-selkies: $(id -u):$(id -g) cannot use $path. Check the old container's PUID/PGID or correct access on the host." >&2
+            exit 1
+        fi
+    fi
+done
+CHECK
+if [[ -f /config/ssl/cert.pem && -f /config/ssl/cert.key ]]; then
+    if [[ -z ${SELKIES_HTTPS_KEY:-} ]] && ! "${session[@]}" test -r /config/ssl/cert.key; then
+        fail "The session user cannot read the original TLS key. Check its owner and PUID/PGID."
+    fi
+    export SELKIES_HTTPS_CERT="${SELKIES_HTTPS_CERT:-/config/ssl/cert.pem}"
+    export SELKIES_HTTPS_KEY="${SELKIES_HTTPS_KEY:-/config/ssl/cert.key}"
+fi
+
+# Earlier images put the wildcard in the first applications block, ahead of
+# their WeChat exception. The native WM uses the first matching rule.
+"${session[@]}" /bin/bash -eu <<'MIGRATE'
+rc="$HOME/.config/openbox/rc.xml"
+wildcard='<application class="*"><maximized>yes</maximized></application>'
+if [[ -f $rc && ! -L $rc && -w $rc ]] && grep -Fq "$wildcard" "$rc" &&
+    grep -zEq '<application class="wechat">[[:space:]]*<maximized>no</maximized>' "$rc" &&
+    ! grep -Fq '<!-- Pelorus fixed-size windows -->' "$rc"; then
+    sed -i '/<application class="[*]"><maximized>yes<\/maximized><\/application>/i\  <!-- Pelorus fixed-size windows -->\n  <application class="wechat"><maximized>no</maximized></application>\n  <application class="QQ"><maximized>no</maximized></application>\n  <application class="Selkies-desktop"><maximized>no</maximized></application>' "$rc"
+fi
+/scripts/refresh-menu.sh
+MIGRATE
+exec "${session[@]}" /etc/container-entrypoint.sh "$@"

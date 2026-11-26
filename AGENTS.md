@@ -1,94 +1,37 @@
-# PROJECT KNOWLEDGE BASE
+# WeChat Selkies 维护指南
 
-**Generated:** 2026-03-23
-**Commit:** e18821f
-**Branch:** master
+本项目基于 Selkies 官方 `main-ubuntu26.04` 镜像，支持 AMD64 和 ARM64。桌面使用 Selkies 内置的 X11 窗口管理器。外部 Agent 通过 `/api/pelorus/` 调用内置 Pelorus，沿用 Web 登录凭据。`/pelorus/` 是浏览器中的 Agent 界面。
 
-## OVERVIEW
+## 代码入口
 
-Docker 容器化微信/QQ Linux 客户端，基于 LinuxServer Selkies WebRTC 基础镜像，通过浏览器远程访问桌面应用。支持 AMD64/ARM64 双架构。
+| 修改内容 | 从哪里开始 |
+| --- | --- |
+| 镜像与依赖 | `Dockerfile` 按架构安装微信，QQ 和 PCManFM 可在构建时关闭。`root/` 中的内容会复制到镜像根目录，只放容器运行所需文件。 |
+| 容器启动 | `root/wechat-container-start` 处理身份、卷权限和旧配置，生成初始菜单，再启动 Selkies。入口放在 `/scripts` 之外，兼容已有的脚本挂载。 |
+| 桌面自启动 | 窗口管理器通过 `root/defaults/autostart` 调用 `root/scripts/start.sh`。应用和定时任务在后台运行。`root/scripts/window_switcher.py` 已停用，保留文件。 |
+| 微信自动登录 | `root/scripts/wechat/wechat-start.sh` 将本次启动的微信 PID 传给 `root/scripts/wechat/wechat-auto-login.py`。修改 AT-SPI 点击逻辑时，保留对目标进程和登录窗口的校验。 |
+| 右键菜单 | 编辑 Openbox 格式的 `root/defaults/menu.xml`。`root/scripts/refresh-menu.sh` 合并桌面的 `.desktop` 快捷方式，仅在内容变化时写入 `/config/.config/openbox/menu.xml`。 |
+| 发布 | `.github/workflows/docker.yml` 从 `master` 构建 `edge` 和 `edge-minimal`。稳定版的完整和精简镜像都通过 AMD64 卷迁移测试后，才更新 `latest` 和 `minimal`。 |
 
-## STRUCTURE
+## 配置与迁移
 
-```
-wechat-selkies/
-├── Dockerfile              # 单阶段构建，基于 selkies:ubuntunoble
-├── docker-compose.yml      # 单服务编排
-├── root/                   # COPY /root / → 容器内脚本和配置
-│   ├── defaults/
-│   │   ├── autostart           # 容器启动入口，仅一行: /scripts/start.sh
-│   │   └── menu.xml            # Openbox 右键菜单模板（静态基础项）
-│   └── scripts/
-│       ├── start.sh            # 主启动脚本：openbox配置 → 菜单刷新 → 监听桌面 → 启动应用
-│       ├── refresh-menu.sh     # 合并 menu.xml + ~/Desktop/*.desktop → 生成最终菜单
-│       ├── window_switcher.py  # ⚠️ 已废弃，仅保留
-│       ├── wechat/             # wechat-start.sh / wechat-restart.sh / wechat-unminimize.sh
-│       └── qq/                 # qq-restart.sh
-├── .github/workflows/      # CI: 多架构构建 + Issue 自动化
-├── docs/images/            # README 截图
-└── config/                 # ⚠️ gitignored 运行时数据挂载点
-```
+- 仓库的 `config/` 是用户挂载到 `/config` 的运行数据。改菜单或启动配置时编辑 `root/` 下的源码，迁移测试使用临时卷。
+- 升级沿用原容器的 `PUID` 和 `PGID`。省略时，仓库 Compose 的默认值为 `1000:100`，直接以 root 启动镜像的默认值为 `911:911`。同一卷可有多种属主，禁止从数据目录推断身份或递归修改卷内属主。
+- Web 登录通常在 `.env` 中设置 `PASSWORD`。文件密码沿用 Selkies 原生的 `SELKIES_BASIC_AUTH_PASSWORD_FILE`，旧 LinuxServer 部署兼容 `FILE__PASSWORD`。
+- 修改用户可见配置时，核对 `Dockerfile` 的镜像默认值和 `docker-compose.yml` 的部署默认值，两者可以不同。例如微信自动登录在镜像中默认开启，仓库 Compose 默认关闭。按需同步 `.env.example`、[中文 README](README.md) 和 [英文 README](README_en.md)。
 
-## WHERE TO LOOK
-
-| 任务 | 位置 | 备注 |
-|------|------|------|
-| 添加新应用 | `Dockerfile` (安装) + `root/defaults/menu.xml` (菜单) | 参考 QQ 安装段落的 case 模式 |
-| 修改启动行为 | `root/scripts/start.sh` | 入口脚本，由 `root/defaults/autostart` 触发 |
-| 修改右键菜单 | `root/defaults/menu.xml` + `root/scripts/refresh-menu.sh` | menu.xml 是模板，refresh-menu.sh 动态合并 ~/Desktop/*.desktop |
-| 修改菜单动态生成逻辑 | `root/scripts/refresh-menu.sh` | 解析 .desktop 文件的 Name/Exec/Icon 字段，处理图标搜索 |
-| 添加新应用启动/重启脚本 | `root/scripts/<app>/` | 遵循 wechat/ 目录模式: start.sh + restart.sh |
-| 修改环境变量 | `Dockerfile` (ENV) + `docker-compose.yml` (environment) | 两处需同步 |
-| CI/CD | `.github/workflows/docker.yml` | tag v* 触发，多架构 buildx，可选推送 Docker Hub |
-| Issue 自动化 | `.github/workflows/issue-validation.yml` + `cleanup-issues.yml` | 标题/描述校验 + 7天自动关闭 |
-
-## CONVENTIONS
-
-- **语言**: 脚本用 Bash (#!/bin/bash)，窗口切换器用 Python3 + Xlib + tkinter
-- **容器路径约定**: `COPY /root /` 将 `root/` 目录内容映射到容器根 `/`，因此 `root/scripts/start.sh` → 容器内 `/scripts/start.sh`
-- **自启动机制**: Selkies 基础镜像读取 `/defaults/autostart` 文件执行启动脚本
-- **菜单刷新**: inotifywait 监听 `~/Desktop/` 变更自动刷新 Openbox 菜单
-- **进程管理**: 应用通过 `nohup ... &` 后台启动，restart 脚本先 `pkill -9` 再启动
-- **restart 脚本模式**: `pkill -9 -f /usr/bin/<app>` → `nohup /usr/bin/<app> >/dev/null 2>&1 &`（QQ 需额外 `--no-sandbox`）
-- **菜单模板 vs 运行时**: `root/defaults/menu.xml` 是源码模板，`/config/.config/openbox/menu.xml` 是运行时生成的，不要混淆
-- **refresh-menu.sh**: 仅在内容变更时才写入 + reconfigure，避免无意义刷新
-- **图标搜索优先级**: proot-apps icons (256→512→128→64→48→scalable) → system icons → fallback xterm icon
-- **多架构**: Dockerfile 使用 `$TARGETPLATFORM` 条件分支安装不同架构 deb 包
-
-## ANTI-PATTERNS (THIS PROJECT)
-
-- **不要直接修改 `config/` 目录下的文件** — 这是运行时挂载数据，gitignored
-- **不要修改 `config/.config/openbox/` 下文件作为"源码"** — 这些由 `root/defaults/` 模板生成
-- **不要在 `root/` 下放非容器必需文件** — `COPY /root /` 会将所有内容复制到容器根目录
-- **不要在 menu.xml 中添加 .desktop 动态条目** — 由 refresh-menu.sh 自动处理
-- **不要在 start.sh 中用 `exec` 替代 `nohup ... &`** — 需要多进程并行运行
-- **升级后功能缺失** → 清空 `./config/.config/openbox/` 目录（已知 gotcha，见 README）
-- **window_switcher.py 已废弃** — `start.sh` 中已注释掉，但文件保留，不要删除
-
-## COMMANDS
+## 本地验证
 
 ```bash
-# 本地构建并启动
-docker-compose up -d --build
+# 检查 Compose 配置
+docker compose config -q
 
-# 仅启动（使用已有镜像）
-docker-compose up -d
+# 修改启动或卷迁移逻辑后，构建本地镜像并用临时卷验证
+docker compose build wechat-selkies
+bash .github/tests/test-volume-migration.sh wechat-selkies:latest
 
-# 查看日志
-docker-compose logs -f wechat-selkies
-
-# 进入容器调试
-docker exec -it wechat-selkies bash
-
-# 清理升级问题
-rm -rf ./config/.config/openbox
+# 修改上游软件包检测脚本后，运行对应单测
+python3 -m unittest discover -s .github/tests -v
 ```
 
-## NOTES
-
-- 端口 3000=HTTP, 3001=HTTPS（推荐 HTTPS）
-- `shm_size: "1gb"` 影响 WebRTC 性能，建议保留
-- `/dev/dri` 映射为可选 GPU 加速
-- `AUTO_START_WECHAT` / `AUTO_START_QQ` 控制容器启动时是否自动拉起应用
-- 第三方应用通过 proot-apps 安装，快捷方式自动出现在右键菜单
-- Docker Hub 推送需在 GitHub 仓库 Environment 中配置 `ENABLE_DOCKERHUB=true`
+首次启动桌面前，复制 `.env.example` 为 `.env` 并设置 `PASSWORD`，然后运行 `docker compose up -d --build`。已有部署保留原 `.env` 和挂载路径，升级与回滚步骤见 [README](README.md#从旧版升级或回滚)。
