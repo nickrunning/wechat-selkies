@@ -30,6 +30,8 @@ services:
       - SELKIES_SUBFOLDER=${SELKIES_SUBFOLDER:-}
       - SELKIES_PORT=${SELKIES_PORT:-}
       - SELKIES_HTTPS_PORT=${SELKIES_HTTPS_PORT:-}
+      # If a reverse proxy triggers "disallowed Origin", list the exact browser origins, separated by commas.
+      # - SELKIES_ALLOWED_ORIGINS=https://wechat.example.com
       - CUSTOM_PORT=${CUSTOM_PORT:-}
       - CUSTOM_HTTPS_PORT=${CUSTOM_HTTPS_PORT:-}
       - HARDEN_DESKTOP=${HARDEN_DESKTOP:-}
