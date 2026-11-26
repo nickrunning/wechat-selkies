@@ -2,6 +2,14 @@
 # Run against a locally built image: bash .github/tests/test-volume-migration.sh IMAGE
 set -euo pipefail
 image=${1:?Pass the local image tag}
+
+# The main WeChat window can open even when its search renderer cannot load.
+renderer_deps=$(docker run --rm --network none --user 1000:100 --env LC_ALL=C \
+    --entrypoint ldd "$image" /opt/wechat/RadiumWMPF/runtime/WeChatAppEx)
+if grep -F 'not found' <<< "$renderer_deps" >&2; then
+    exit 1
+fi
+
 work=$(mktemp -d)
 volume=$(docker volume create)
 container=

@@ -22,7 +22,8 @@ ARG INSTALL_PCMANFM=true
 RUN echo "🏗️ Building WeChat-Selkies on $BUILDPLATFORM, targeting $TARGETPLATFORM"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        fonts-noto-cjk python3-gi gir1.2-atspi-2.0 at-spi2-core inotify-tools xterm locales && \
+        fonts-noto-cjk python3-gi gir1.2-atspi-2.0 at-spi2-core inotify-tools xterm locales \
+        libatk1.0-0t64 libatk-bridge2.0-0t64 && \
     localedef -i zh_CN -f UTF-8 zh_CN.UTF-8 && \
     if [ "$INSTALL_PCMANFM" = "true" ]; then apt-get install -y --no-install-recommends pcmanfm; fi
 
