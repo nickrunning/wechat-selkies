@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     if [ "$INSTALL_PCMANFM" = "true" ]; then apt-get install -y --no-install-recommends pcmanfm; fi
 
 # Install WeChat based on target architecture
+# Its renderer wrapper disables the sandbox that needs extra container privileges.
 ARG WECHAT_AMD64_URL="https://dldir1v6.qq.com/weixin/Universal/Linux/WeChatLinux_x86_64.deb"
 ARG WECHAT_ARM64_URL="https://dldir1v6.qq.com/weixin/Universal/Linux/WeChatLinux_arm64.deb"
 ARG WECHAT_AMD64_SHA256
@@ -51,6 +52,7 @@ RUN case "$TARGETPLATFORM" in \
     if [ -n "$WECHAT_SHA256" ]; then echo "$WECHAT_SHA256  wechat.deb" | sha256sum -c -; fi && \
     echo "🔧 Installing WeChat..." && \
     (dpkg -i wechat.deb || (apt-get update && apt-get install -f -y && dpkg -i wechat.deb)) && \
+    mv /opt/wechat/RadiumWMPF/runtime/WeChatAppEx /opt/wechat/RadiumWMPF/runtime/WeChatAppEx.bin && \
     rm -f wechat.deb && \
     echo "✅ WeChat installation completed for $WECHAT_ARCH"
 

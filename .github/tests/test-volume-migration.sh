@@ -5,7 +5,7 @@ image=${1:?Pass the local image tag}
 
 # The main WeChat window can open even when its search renderer cannot load.
 renderer_deps=$(docker run --rm --network none --user 1000:100 --env LC_ALL=C \
-    --entrypoint ldd "$image" /opt/wechat/RadiumWMPF/runtime/WeChatAppEx)
+    --entrypoint ldd "$image" /opt/wechat/RadiumWMPF/runtime/WeChatAppEx.bin)
 if grep -F 'not found' <<< "$renderer_deps" >&2; then
     exit 1
 fi
@@ -88,6 +88,7 @@ archive_before=$(admin 'stat -c %u:%g:%a /config/xwechat_files/archive')
 migrate -e EXPECT_IDS=1000:100 -e PUID=1000 -e PGID=100
 
 # Start the real desktop with the old Compose identity and the same private volume.
+# Keep default Docker security settings to catch renderer sandbox regressions.
 container=$(docker run -d --network none --shm-size 1g -v "$volume:/config" \
     -v "$work/password:/run/test-password:ro" -e SELKIES_BASIC_AUTH_PASSWORD_FILE=/run/test-password -e PASSWORD= \
     -e PUID=1000 -e PGID=100 -e CUSTOM_USER=migration -e ENABLE_WECHAT_AUTO_LOGIN=false \
@@ -98,13 +99,15 @@ for ((attempt=0; attempt<60; attempt++)); do
     if response=$("${api[@]}" -f -u "migration:$(< "$work/password")" "$desktop") &&
         python3 -c 'import json, sys
 windows = json.load(sys.stdin)["windows"]
-sys.exit(not any(w["app_id"].lower() == "wechat" and w["mapped"] for w in windows))' <<< "$response"; then
+sys.exit(not any(w["app_id"].lower() == "wechat" and w["mapped"] for w in windows))' <<< "$response" &&
+        docker exec "$container" pgrep -f \
+            '^/opt/wechat/RadiumWMPF/runtime/WeChatAppEx[.]bin .*--utility-sub-type=network[.]mojom[.]NetworkService ' >/dev/null; then
         break
     fi
     sleep 1
 done
 if (( attempt == 60 )); then
-    echo 'WeChat did not appear in the authenticated Pelorus desktop' >&2
+    echo 'WeChat desktop or embedded browser did not start' >&2
     exit 1
 fi
 [[ $("${api[@]}" -o /dev/null -w '%{http_code}' "$desktop") == 401 ]]

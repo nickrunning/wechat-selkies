@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /opt/wechat/RadiumWMPF/runtime/WeChatAppEx.bin --no-sandbox "$@"
