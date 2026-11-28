@@ -102,11 +102,20 @@ jobs:
           grep -v '^#' versions/upstream.env | grep -v '^\s*$' | sed 's/"//g' >> "$GITHUB_ENV"
         fi
 
+    - name: Resolve Selkies base image for both builds
+      id: base
+      shell: bash
+      run: |
+        image=$(awk '$1 == "FROM" { print $2; exit }' Dockerfile)
+        digest=$(docker buildx imagetools inspect "$image" --format '{{json .Manifest}}' | jq -er '.digest')
+        echo "context=$image=docker-image://$image@$digest" >> "$GITHUB_OUTPUT"
+
     - name: Build full Docker image
       id: build-image
       uses: docker/build-push-action@v5
       with:
         context: .
+        build-contexts: ${{ steps.base.outputs.context }}
         platforms: linux/amd64,linux/arm64
         push: ${{ steps.channel.outputs.name != 'build' }}
         tags: ${{ steps.meta.outputs.tags }}
@@ -141,6 +150,7 @@ jobs:
       uses: docker/build-push-action@v5
       with:
         context: .
+        build-contexts: ${{ steps.base.outputs.context }}
         platforms: linux/amd64,linux/arm64
         push: ${{ steps.channel.outputs.name != 'build' }}
         tags: ${{ steps.meta-minimal.outputs.tags }}
