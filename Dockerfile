@@ -1,5 +1,5 @@
 # WeChat for Linux using Selkies baseimage
-FROM ghcr.io/selkies-project/selkies/base:main-ubuntu26.04@sha256:50dac7381d2aa306cd7fb2084feb331f37d6007bd7042df5786438eafd19530e
+FROM ghcr.io/selkies-project/selkies/base:main-ubuntu26.04@sha256:d692350bc51997c322fee01b41f98952eecc0520ed51d31037604f9ab4e77ed3
 
 USER 0
 SHELL ["/bin/sh", "-c"]
