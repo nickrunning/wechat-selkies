@@ -111,10 +111,25 @@ fi
 "${session[@]}" /bin/bash -eu <<'MIGRATE'
 rc="$HOME/.config/openbox/rc.xml"
 wildcard='<application class="*"><maximized>yes</maximized></application>'
-if [[ -f $rc && ! -L $rc && -w $rc ]] && grep -Fq "$wildcard" "$rc" &&
-    grep -zEq '<application class="wechat">[[:space:]]*<maximized>no</maximized>' "$rc" &&
-    ! grep -Fq '<!-- Pelorus fixed-size windows -->' "$rc"; then
-    sed -i '/<application class="[*]"><maximized>yes<\/maximized><\/application>/i\  <!-- Pelorus fixed-size windows -->\n  <application class="wechat"><maximized>no</maximized></application>\n  <application class="QQ"><maximized>no</maximized></application>\n  <application class="Selkies-desktop"><maximized>no</maximized></application>' "$rc"
+wechat_default='<application class="wechat">[[:space:]]*<maximized>no</maximized>'
+qq_default='<application class="QQ">[[:space:]]*<maximized>no</maximized>'
+if [[ -f $rc && ! -L $rc && -w $rc ]] && grep -zEq "$wechat_default" "$rc"; then
+    if grep -Fq "$wildcard" "$rc" && ! grep -Fq '<!-- Pelorus fixed-size windows -->' "$rc"; then
+        sed -i '/<application class="[*]"><maximized>yes<\/maximized><\/application>/i\  <!-- Pelorus fixed-size windows -->\n  <application class="wechat"><maximized>no</maximized></application>\n  <application class="QQ"><maximized>no</maximized></application>\n  <application class="Selkies-desktop"><maximized>no</maximized></application>' "$rc"
+    fi
+
+    # Only migrate profiles carrying the project's old WeChat/QQ defaults.
+    defaults=/etc/xdg/openbox/rc.xml
+    if [[ -r $defaults ]] && grep -zEq "$wechat_default[[:space:]]*</application>[[:space:]]*$qq_default" "$rc" &&
+        search_rule=$(grep -o '<application class="wechat" type="utility"[^>]*>.*</application>' "$defaults") &&
+        ! grep -Fq "$search_rule" "$rc"; then
+        # Keep earlier user rules first. The general WeChat rule may be in
+        # a later block, in which case append to the first active block.
+        SEARCH_RULE="$search_rule" perl -0777 -pi -e '
+            s{<!--.*?-->(*SKIP)(*F)|<application class="wechat">|</applications>}
+             {$ENV{SEARCH_RULE}\n  $&}s;
+        ' "$rc"
+    fi
 fi
 /scripts/refresh-menu.sh
 MIGRATE

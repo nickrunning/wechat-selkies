@@ -53,10 +53,12 @@ admin 'mkdir -p /config/.config /config/xwechat_files; echo old-profile > /confi
        chown 0:0 /config'
 migrate
 migrate -e PGID=2345 -e EXPECT_IDS=911:2345
-# A custom maximize-all rule alone is intentional. Only the old project's
-# combination of that wildcard and its later WeChat exception needs reordering.
+# Keep user rules in priority order, including an explicit popup focus policy.
 rc=/config/.config/openbox/rc.xml
-admin "printf '%s\n' '<openbox_config><applications>' '<application class=\"*\"><maximized>yes</maximized></application>' '</applications></openbox_config>' > $rc
+admin "printf '%s\n' '<openbox_config><applications>' \
+       '<application name=\"wechat\" type=\"utility\"><focus>yes</focus></application>' \
+       '<application class=\"*\"><maximized>yes</maximized></application>' \
+       '</applications></openbox_config>' > $rc
        chown 911:911 $rc"
 custom_before=$(admin "sha256sum $rc")
 migrate -e PUID=911 -e PGID=911
@@ -78,6 +80,16 @@ migrate -e EXPECT_IDS=1234:911 -e PUID=1234
 admin 'chown 0:3456 /config; chmod 2750 /config'
 migrate -e EXPECT_IDS=1234:2345 -e PUID=1234 -e PGID=2345
 admin "test \"\$(grep -c 'Pelorus fixed-size windows' $rc)\" = 1"
+# Earlier user rules keep priority, then the popup exception, then the legacy defaults.
+admin "cat $rc" | python3 -c '
+import sys
+import xml.etree.ElementTree as ET
+rules = ET.parse(sys.stdin).findall("./applications/application")
+popup = {"class": "wechat", "type": "utility", "title": "wechat"}
+assert rules[0].get("name") == "wechat" and rules[0].findtext("focus") == "yes"
+assert rules[1].attrib == popup and rules[1].findtext("focus") == "no"
+assert sum(rule.attrib == popup for rule in rules) == 1
+'
 admin 'test "$(stat -c %u:%g:%a /config)" = 1234:3456:2750'
 
 # An old Compose deployment may keep a read-only archive next to its active account.

@@ -251,6 +251,10 @@ wechat-selkies/
 
 ## Troubleshooting
 
+### WeChat search closes or typing goes to the chat
+
+If you use a custom `/config/.config/openbox/rc.xml`, copy the `<application>` rule from the [image configuration](root/etc/xdg/openbox/rc.xml) into the first `<applications>` section, before general WeChat or wildcard rules, then restart the container.
+
 ### Updating WeChat/QQ Version
 
 When WeChat or QQ displays a "version outdated" message, pull an updated image from your chosen release channel and recreate the container. Your chat history and configurations will be preserved:

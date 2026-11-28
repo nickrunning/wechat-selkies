@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <applications>
+    <!-- The main window receives typing while WeChat shows its search suggestions. -->
+    <application class="wechat" type="utility" title="wechat"><focus>no</focus></application>
+  </applications>
+</openbox_config>

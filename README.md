@@ -286,6 +286,9 @@ git pull && docker compose up -d --build
    - 检查端口 3001 是否被占用
    - 确认 Docker 容器正常运行：`docker ps`
 
+2. **微信顶部搜索框闪退或输入落到聊天框**
+   如果使用自定义 `/config/.config/openbox/rc.xml`，请把[镜像配置](root/etc/xdg/openbox/rc.xml)中的 `<application>` 规则复制到第一个 `<applications>` 段，放在通用微信规则和通配规则之前，然后重启容器。
+
 ### 日志查看
 
 查看容器运行日志：
